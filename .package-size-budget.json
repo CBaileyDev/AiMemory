@@ -1,0 +1,6 @@
+{
+  "_comment": "Maximum tarball + unpacked sizes for `npm pack`. Increase only with a PR justification.",
+  "maxPackedBytes": 3145728,
+  "maxUnpackedBytes": 7340032,
+  "maxFileCount": 200
+}
