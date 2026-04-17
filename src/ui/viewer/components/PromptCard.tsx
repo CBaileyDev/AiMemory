@@ -1,31 +1,32 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { UserPrompt } from '../types';
-import { formatDate } from '../utils/formatters';
+import { BaseCard } from './BaseCard';
+import { Badge } from './primitives';
 
 interface PromptCardProps {
   prompt: UserPrompt;
+  pulseOnMount?: boolean;
 }
 
-export function PromptCard({ prompt }: PromptCardProps) {
-  const date = formatDate(prompt.created_at_epoch);
-
+function PromptCardImpl({ prompt, pulseOnMount }: PromptCardProps) {
   return (
-    <div className="card prompt-card">
-      <div className="card-header">
-        <div className="card-header-left">
-          <span className="card-type">Prompt</span>
-          <span className={`card-source source-${prompt.platform_source || 'claude'}`}>
-            {prompt.platform_source || 'claude'}
-          </span>
-          <span className="card-project">{prompt.project}</span>
-        </div>
-      </div>
-      <div className="card-content">
-        {prompt.prompt_text}
-      </div>
-      <div className="card-meta">
-        <span className="meta-date">#{prompt.id} • {date}</span>
-      </div>
-    </div>
+    <BaseCard
+      id={prompt.id}
+      idPrefix="prompt"
+      source={prompt.platform_source}
+      project={prompt.project}
+      type="prompt"
+      typeBadge={<Badge tone="info">prompt</Badge>}
+      createdAtEpoch={prompt.created_at_epoch}
+      accent="prompt"
+      pulseOnMount={pulseOnMount}
+    >
+      <p className="am-card__narrative">{prompt.prompt_text}</p>
+    </BaseCard>
   );
 }
+
+export const PromptCard = memo(PromptCardImpl, (prev, next) =>
+  prev.prompt.id === next.prompt.id &&
+  prev.pulseOnMount === next.pulseOnMount
+);

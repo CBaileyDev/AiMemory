@@ -1,150 +1,115 @@
-import React, { useState } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { Observation } from '../types';
-import { formatDate } from '../utils/formatters';
+import { BaseCard } from './BaseCard';
+import { Badge } from './primitives';
 
 interface ObservationCardProps {
   observation: Observation;
+  pulseOnMount?: boolean;
 }
 
-// Helper to strip project root from file paths
+function parseJsonArray(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const val = JSON.parse(raw);
+    return Array.isArray(val) ? val : [];
+  } catch {
+    return [];
+  }
+}
+
 function stripProjectRoot(filePath: string): string {
-  // Try to extract relative path by finding common project markers
   const markers = ['/Scripts/', '/src/', '/plugin/', '/docs/'];
-
   for (const marker of markers) {
-    const index = filePath.indexOf(marker);
-    if (index !== -1) {
-      // Keep the marker and everything after it
-      return filePath.substring(index + 1);
-    }
+    const i = filePath.indexOf(marker);
+    if (i !== -1) return filePath.substring(i + 1);
   }
-
-  // Fallback: if path contains project name, strip everything before it
-  const projectIndex = filePath.indexOf('claude-mem/');
-  if (projectIndex !== -1) {
-    return filePath.substring(projectIndex + 'claude-mem/'.length);
-  }
-
-  // If no markers found, return basename or original path
+  const projIdx = filePath.indexOf('claude-mem/');
+  if (projIdx !== -1) return filePath.substring(projIdx + 'claude-mem/'.length);
   const parts = filePath.split('/');
   return parts.length > 3 ? parts.slice(-3).join('/') : filePath;
 }
 
-export function ObservationCard({ observation }: ObservationCardProps) {
-  const [showFacts, setShowFacts] = useState(false);
-  const [showNarrative, setShowNarrative] = useState(false);
-  const date = formatDate(observation.created_at_epoch);
+/**
+ * ObservationCard — one observation row. 3-line collapsed narrative, expand
+ * via button or Enter; `y` copies cite key (handled in BaseCard).
+ */
+function ObservationCardImpl({ observation, pulseOnMount }: ObservationCardProps) {
+  const [expanded, setExpanded] = useState(false);
 
-  // Parse JSON fields
-  const facts = observation.facts ? JSON.parse(observation.facts) : [];
-  const concepts = observation.concepts ? JSON.parse(observation.concepts) : [];
-  const filesRead = observation.files_read ? JSON.parse(observation.files_read).map(stripProjectRoot) : [];
-  const filesModified = observation.files_modified ? JSON.parse(observation.files_modified).map(stripProjectRoot) : [];
+  const { facts, concepts, filesRead, filesModified, hasDetails } = useMemo(() => {
+    const f = parseJsonArray(observation.facts);
+    const c = parseJsonArray(observation.concepts);
+    const r = parseJsonArray(observation.files_read).map(stripProjectRoot);
+    const m = parseJsonArray(observation.files_modified).map(stripProjectRoot);
+    return {
+      facts: f, concepts: c, filesRead: r, filesModified: m,
+      hasDetails: f.length + c.length + r.length + m.length > 0
+    };
+  }, [observation.facts, observation.concepts, observation.files_read, observation.files_modified]);
 
-  // Show facts toggle if there are facts, concepts, or files
-  const hasFactsContent = facts.length > 0 || concepts.length > 0 || filesRead.length > 0 || filesModified.length > 0;
+  const toneForType =
+    observation.type === 'bugfix' || observation.type === 'bug' ? 'error' :
+    observation.type === 'decision' ? 'accent' :
+    observation.type === 'feature' ? 'success' :
+    observation.type === 'refactor' ? 'info' :
+    observation.type === 'discovery' ? 'warning' :
+    'neutral';
 
   return (
-    <div className="card">
-      {/* Header with toggle buttons in top right */}
-      <div className="card-header">
-        <div className="card-header-left">
-          <span className={`card-type type-${observation.type}`}>
-            {observation.type}
-          </span>
-          <span className={`card-source source-${observation.platform_source || 'claude'}`}>
-            {observation.platform_source || 'claude'}
-          </span>
-          <span className="card-project">{observation.project}</span>
-        </div>
-        <div className="view-mode-toggles">
-          {hasFactsContent && (
-            <button
-              className={`view-mode-toggle ${showFacts ? 'active' : ''}`}
-              onClick={() => {
-                setShowFacts(!showFacts);
-                if (!showFacts) setShowNarrative(false); // Turn off narrative when turning on facts
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 11 12 14 22 4"></polyline>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-              </svg>
-              <span>facts</span>
-            </button>
-          )}
-          {observation.narrative && (
-            <button
-              className={`view-mode-toggle ${showNarrative ? 'active' : ''}`}
-              onClick={() => {
-                setShowNarrative(!showNarrative);
-                if (!showNarrative) setShowFacts(false); // Turn off facts when turning on narrative
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-              </svg>
-              <span>narrative</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Title */}
-      <div className="card-title">{observation.title || 'Untitled'}</div>
-
-      {/* Content based on toggle state */}
-      <div className="view-mode-content">
-        {!showFacts && !showNarrative && observation.subtitle && (
-          <div className="card-subtitle">{observation.subtitle}</div>
-        )}
-        {showFacts && facts.length > 0 && (
-          <ul className="facts-list">
-            {facts.map((fact: string, i: number) => (
-              <li key={i}>{fact}</li>
+    <BaseCard
+      id={observation.id}
+      idPrefix="obs"
+      source={observation.platform_source}
+      project={observation.project}
+      type={observation.type || undefined}
+      typeBadge={<Badge tone={toneForType}>{observation.type}</Badge>}
+      createdAtEpoch={observation.created_at_epoch}
+      title={observation.title || 'Untitled'}
+      subtitle={!expanded ? observation.subtitle || undefined : undefined}
+      pulseOnMount={pulseOnMount}
+      accent="neutral"
+      footer={
+        (concepts.length > 0 || filesRead.length > 0 || filesModified.length > 0) && (
+          <div className="am-card__tags">
+            {concepts.slice(0, 6).map((c) => (
+              <Badge key={c} tone="accent">{c}</Badge>
             ))}
-          </ul>
-        )}
-        {showNarrative && observation.narrative && (
-          <div className="narrative">
-            {observation.narrative}
-          </div>
-        )}
-      </div>
-
-      {/* Metadata footer - id, date, and conditionally concepts/files when facts toggle is on */}
-      <div className="card-meta">
-        <span className="meta-date">#{observation.id} • {date}</span>
-        {showFacts && (concepts.length > 0 || filesRead.length > 0 || filesModified.length > 0) && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-            {concepts.map((concept: string, i: number) => (
-              <span key={i} style={{
-                padding: '2px 8px',
-                background: 'var(--color-type-badge-bg)',
-                color: 'var(--color-type-badge-text)',
-                borderRadius: '3px',
-                fontWeight: '500',
-                fontSize: '10px'
-              }}>
-                {concept}
-              </span>
+            {filesModified.slice(0, 3).map((f) => (
+              <span key={`m:${f}`} className="am-card__file" title={`modified ${f}`}>{f}</span>
             ))}
-            {filesRead.length > 0 && (
-              <span className="meta-files">
-                <span className="file-label">read:</span> {filesRead.join(', ')}
-              </span>
-            )}
-            {filesModified.length > 0 && (
-              <span className="meta-files">
-                <span className="file-label">modified:</span> {filesModified.join(', ')}
-              </span>
-            )}
+            {filesRead.slice(0, 2).map((f) => (
+              <span key={`r:${f}`} className="am-card__file am-card__file--read" title={`read ${f}`}>{f}</span>
+            ))}
           </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+      {expanded && observation.narrative && (
+        <p className="am-card__narrative">{observation.narrative}</p>
+      )}
+      {expanded && facts.length > 0 && (
+        <ul className="am-card__facts">
+          {facts.map((fact, i) => <li key={i}>{fact}</li>)}
+        </ul>
+      )}
+      {(observation.narrative || hasDetails) && (
+        <button
+          type="button"
+          className="am-card__toggle"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </BaseCard>
   );
 }
+
+export const ObservationCard = memo(ObservationCardImpl, (prev, next) =>
+  prev.observation.id === next.observation.id &&
+  prev.observation.title === next.observation.title &&
+  prev.observation.narrative === next.observation.narrative &&
+  prev.pulseOnMount === next.pulseOnMount
+);
