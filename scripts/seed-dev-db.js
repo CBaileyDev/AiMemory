@@ -194,6 +194,37 @@ function syntheticSubtitle(rand) {
 function ensureSchema(db) {
   // Idempotent — only creates tables if they don't exist. Existing
   // production-schema databases are left unchanged.
+  //
+  // sdk_sessions powers platform_source joins in worker queries
+  // (Sources dashboard, context routes). Seeded rows give the viewer
+  // a realistic WoW/sparkline surface. Columns match the production
+  // migration runner so the worker's migration check is a no-op on
+  // seeded databases.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sdk_sessions (
+      memory_session_id TEXT PRIMARY KEY,
+      content_session_id TEXT,
+      project TEXT,
+      started_at_epoch INTEGER,
+      status TEXT DEFAULT 'active',
+      platform_source TEXT NOT NULL DEFAULT 'claude'
+    )
+  `);
+  const sdkCols = db.query(`PRAGMA table_info('sdk_sessions')`).all();
+  const required = {
+    platform_source: `ALTER TABLE sdk_sessions ADD COLUMN platform_source TEXT NOT NULL DEFAULT 'claude'`,
+    content_session_id: `ALTER TABLE sdk_sessions ADD COLUMN content_session_id TEXT`,
+    status: `ALTER TABLE sdk_sessions ADD COLUMN status TEXT DEFAULT 'active'`,
+    started_at_epoch: `ALTER TABLE sdk_sessions ADD COLUMN started_at_epoch INTEGER`
+  };
+  for (const [col, sql] of Object.entries(required)) {
+    if (!sdkCols.some((c) => c.name === col)) db.run(sql);
+  }
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_sdk_sessions_platform_source
+      ON sdk_sessions (platform_source)
+  `);
+
   db.run(`
     CREATE TABLE IF NOT EXISTS observations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -257,6 +288,28 @@ function main() {
       ?, ?, ?, ?
     )
   `);
+
+  // Backfill sdk_sessions so platform_source joins resolve in the
+  // Sources dashboard + source-aware filters.
+  const sessionUpsert = db.prepare(`
+    INSERT OR REPLACE INTO sdk_sessions (memory_session_id, content_session_id, project, started_at_epoch, status, platform_source)
+    VALUES (?, ?, ?, ?, 'completed', ?)
+  `);
+  const sessionAgg = new Map();
+  for (const row of rows) {
+    const existing = sessionAgg.get(row.memory_session_id);
+    if (!existing || row.created_at_epoch < existing.started_at_epoch) {
+      sessionAgg.set(row.memory_session_id, {
+        memory_session_id: row.memory_session_id,
+        project: row.project,
+        started_at_epoch: row.created_at_epoch,
+        platform_source: row.source
+      });
+    }
+  }
+  for (const s of sessionAgg.values()) {
+    sessionUpsert.run(s.memory_session_id, s.memory_session_id, s.project, s.started_at_epoch, s.platform_source);
+  }
 
   const txn = db.transaction((batch) => {
     for (const row of batch) {
