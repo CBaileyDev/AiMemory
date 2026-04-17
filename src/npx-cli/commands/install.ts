@@ -217,7 +217,9 @@ async function setupIDEs(selectedIDEs: string[]): Promise<string[]> {
       case 'goose':
       case 'crush':
       case 'roo-code':
-      case 'warp': {
+      case 'warp':
+      case 'kimi':
+      case 'claude-desktop': {
         const { MCP_IDE_INSTALLERS } = await import('../../services/integrations/McpIntegrations.js');
         const mcpInstaller = MCP_IDE_INSTALLERS[ideId];
         if (mcpInstaller) {

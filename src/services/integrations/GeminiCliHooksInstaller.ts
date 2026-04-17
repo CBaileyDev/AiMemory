@@ -26,7 +26,7 @@ import path from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { logger } from '../../utils/logger.js';
-import { findWorkerServicePath, findBunPath } from './CursorHooksInstaller.js';
+import { findWorkerServicePath, findBunPath, findMcpServerPath } from './CursorHooksInstaller.js';
 
 // ============================================================================
 // Types
@@ -51,9 +51,19 @@ interface GeminiHooksConfig {
   [eventName: string]: GeminiHookGroup[];
 }
 
-/** Full ~/.gemini/settings.json structure (partial — we only care about hooks) */
+/** Full ~/.gemini/settings.json structure (partial — we care about hooks + mcpServers) */
 interface GeminiSettingsJson {
   hooks?: GeminiHooksConfig;
+  /**
+   * `mcpServers` is consumed by both the Gemini CLI and the Gemini Code Assist
+   * VS Code extension. Registering an entry here exposes claude-mem search
+   * tools inside the IDE, not just the terminal CLI.
+   */
+  mcpServers?: Record<string, {
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
   [key: string]: unknown;
 }
 
@@ -298,9 +308,25 @@ export async function installGeminiCliHooks(): Promise<number> {
     const existingSettings = readGeminiSettings();
     const mergedSettings = mergeHooksIntoSettings(existingSettings, hooksConfig);
 
+    // Also register the MCP server so Gemini Code Assist for VS Code
+    // (which reads the same settings.json) can invoke claude-mem search.
+    // This is a no-op if we can't find the MCP server path, since users
+    // without the marketplace install won't have it.
+    const mcpServerPath = findMcpServerPath();
+    if (mcpServerPath) {
+      if (!mergedSettings.mcpServers) mergedSettings.mcpServers = {};
+      mergedSettings.mcpServers[HOOK_NAME] = {
+        command: process.execPath,
+        args: [mcpServerPath],
+      };
+    }
+
     // Write back
     writeGeminiSettings(mergedSettings);
     console.log(`  Merged hooks into ${GEMINI_SETTINGS_PATH}`);
+    if (mcpServerPath) {
+      console.log(`  Registered MCP server for Gemini Code Assist VS Code.`);
+    }
 
     // Setup GEMINI.md context injection
     setupGeminiMdContextSection();
@@ -381,6 +407,14 @@ export function uninstallGeminiCliHooks(): number {
     // Clean up empty hooks object
     if (Object.keys(settings.hooks).length === 0) {
       delete settings.hooks;
+    }
+
+    // Remove the MCP entry we registered for Gemini Code Assist VS Code.
+    if (settings.mcpServers?.[HOOK_NAME]) {
+      delete settings.mcpServers[HOOK_NAME];
+      if (Object.keys(settings.mcpServers).length === 0) {
+        delete settings.mcpServers;
+      }
     }
 
     writeGeminiSettings(settings);

@@ -54,6 +54,8 @@ export const ALL_IDE_IDS = [
   'crush',
   'roo-code',
   'warp',
+  'kimi',
+  'claude-desktop',
 ] as const;
 
 export type IdeId = (typeof ALL_IDE_IDS)[number];
@@ -214,9 +216,21 @@ const INSTALLERS: Record<IdeId, { module: string; fn: string; args?: string }> =
     module: 'src/services/integrations/McpIntegrations.ts',
     fn: 'MCP_IDE_INSTALLERS["warp"]',
   },
+  kimi: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_INSTALLERS["kimi"]',
+  },
+  'claude-desktop': {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_INSTALLERS["claude-desktop"]',
+  },
 };
 
-/** Uninstaller table. Entries marked `null` have no uninstall path today. */
+/**
+ * Uninstaller table. Tier-1 IDEs have their own uninstallers; MCP IDEs go
+ * through `MCP_IDE_UNINSTALLERS` (Phase 2). Entries missing from this map
+ * return `{ exitCode: 0, stdout: 'no uninstaller' }` from `runUninstaller`.
+ */
 const UNINSTALLERS: Partial<Record<IdeId, { module: string; fn: string; args?: string }>> = {
   cursor: {
     module: 'src/services/integrations/CursorHooksInstaller.ts',
@@ -243,6 +257,39 @@ const UNINSTALLERS: Partial<Record<IdeId, { module: string; fn: string; args?: s
     module: 'src/services/integrations/OpenClawInstaller.ts',
     fn: 'uninstallOpenClawPlugin',
   },
+  // MCP-tier uninstallers come from the Phase 2 map.
+  'copilot-cli': {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["copilot-cli"]',
+  },
+  antigravity: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["antigravity"]',
+  },
+  goose: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["goose"]',
+  },
+  crush: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["crush"]',
+  },
+  'roo-code': {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["roo-code"]',
+  },
+  warp: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["warp"]',
+  },
+  kimi: {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["kimi"]',
+  },
+  'claude-desktop': {
+    module: 'src/services/integrations/McpIntegrations.ts',
+    fn: 'MCP_IDE_UNINSTALLERS["claude-desktop"]',
+  },
 };
 
 /** Spawn a bun subprocess that imports the given module and invokes a fn. */
@@ -268,10 +315,13 @@ function runInSandbox(
   `;
 
   // Windows and Unix both resolve HOME correctly when both vars are set.
+  // APPDATA is explicitly redirected for Claude Desktop on Windows, which
+  // uses %APPDATA%\Claude\claude_desktop_config.json rather than $HOME.
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HOME: sandbox.home,
     USERPROFILE: sandbox.home,
+    APPDATA: join(sandbox.home, 'AppData', 'Roaming'),
     CLAUDE_CONFIG_DIR: join(sandbox.home, '.claude'),
     CLAUDE_MEM_DATA_DIR: join(sandbox.home, '.claude-mem'),
     OPENCODE_CONFIG_DIR: join(sandbox.home, '.config', 'opencode'),

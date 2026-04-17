@@ -25,6 +25,7 @@ import {
   SAMPLE_CONFIG,
 } from '../transcripts/config.js';
 import type { TranscriptWatchConfig, WatchTarget } from '../transcripts/types.js';
+import { findMcpServerPath } from './CursorHooksInstaller.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,7 +33,65 @@ import type { TranscriptWatchConfig, WatchTarget } from '../transcripts/types.js
 
 const CODEX_DIR = path.join(homedir(), '.codex');
 const CODEX_AGENTS_MD_PATH = path.join(CODEX_DIR, 'AGENTS.md');
+const CODEX_CONFIG_TOML_PATH = path.join(CODEX_DIR, 'config.toml');
 const CLAUDE_MEM_DIR = path.join(homedir(), '.claude-mem');
+
+// ============================================================================
+// Codex config.toml MCP registration (shared by Codex CLI + VS Code extension)
+// ============================================================================
+
+/**
+ * Idempotently register the claude-mem MCP server in `~/.codex/config.toml`.
+ * The TOML block uses the tagged sentinels so our uninstaller can remove
+ * exactly what we wrote, leaving any user edits intact.
+ *
+ * Codex shares this file across its CLI and the VS Code extension, so one
+ * write covers both surfaces.
+ */
+function registerCodexMcpServer(): boolean {
+  const mcpServerPath = findMcpServerPath();
+  if (!mcpServerPath) return false;
+
+  const escapedPath = mcpServerPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const escapedNode = process.execPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const block = [
+    '# >>> claude-mem mcp BEGIN (do not edit; managed by claude-mem)',
+    '[mcp_servers.claude-mem]',
+    `command = "${escapedNode}"`,
+    `args = ["${escapedPath}"]`,
+    '# <<< claude-mem mcp END',
+    '',
+  ].join('\n');
+
+  mkdirSync(CODEX_DIR, { recursive: true });
+
+  let existing = '';
+  if (existsSync(CODEX_CONFIG_TOML_PATH)) {
+    existing = readFileSync(CODEX_CONFIG_TOML_PATH, 'utf-8');
+  }
+
+  const tagged = /# >>> claude-mem mcp BEGIN[\s\S]*?# <<< claude-mem mcp END\n?/;
+  const next = tagged.test(existing)
+    ? existing.replace(tagged, block)
+    : (existing.trimEnd() + (existing.trim().length > 0 ? '\n\n' : '') + block);
+
+  writeFileSync(CODEX_CONFIG_TOML_PATH, next);
+  return true;
+}
+
+function unregisterCodexMcpServer(): void {
+  if (!existsSync(CODEX_CONFIG_TOML_PATH)) return;
+  const existing = readFileSync(CODEX_CONFIG_TOML_PATH, 'utf-8');
+  const tagged = /\n?# >>> claude-mem mcp BEGIN[\s\S]*?# <<< claude-mem mcp END\n?/;
+  if (!tagged.test(existing)) return;
+  const next = existing.replace(tagged, '').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+  if (next.trim().length === 0) {
+    // File is now empty — remove it rather than leaving an empty shell.
+    try { require('fs').unlinkSync(CODEX_CONFIG_TOML_PATH); } catch {}
+  } else {
+    writeFileSync(CODEX_CONFIG_TOML_PATH, next);
+  }
+}
 
 /**
  * The watch name used to identify the Codex CLI entry in transcript-watch.json.
@@ -193,7 +252,13 @@ export async function installCodexCli(): Promise<number> {
     console.log(`  Watch path: ~/.codex/sessions/**/*.jsonl`);
     console.log(`  Schema: codex (v${SAMPLE_CONFIG.schemas?.codex?.version ?? '?'})`);
 
-    // Step 2: Clean up legacy global AGENTS.md context
+    // Step 2: Register MCP server in ~/.codex/config.toml so the Codex CLI
+    // AND the Codex VS Code extension both see claude-mem search tools.
+    if (registerCodexMcpServer()) {
+      console.log(`  Registered MCP server in ${CODEX_CONFIG_TOML_PATH}`);
+    }
+
+    // Step 3: Clean up legacy global AGENTS.md context
     cleanupLegacyCodexAgentsMdContext();
 
     console.log(`
@@ -255,7 +320,15 @@ export function uninstallCodexCli(): number {
       console.log('  No transcript-watch.json found -- nothing to remove.');
     }
 
-    // Step 2: Remove legacy global context section from AGENTS.md
+    // Step 2: Remove the MCP block from ~/.codex/config.toml (if we added one)
+    unregisterCodexMcpServer();
+    if (!existsSync(CODEX_CONFIG_TOML_PATH)) {
+      console.log(`  Removed empty config.toml`);
+    } else {
+      console.log(`  Cleaned MCP block from ${CODEX_CONFIG_TOML_PATH}`);
+    }
+
+    // Step 3: Remove legacy global context section from AGENTS.md
     cleanupLegacyCodexAgentsMdContext();
 
     console.log('\nUninstallation complete!');

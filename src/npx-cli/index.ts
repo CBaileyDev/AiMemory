@@ -67,9 +67,9 @@ ${pc.bold('Diagnostics')}:
   ${pc.cyan('npx claude-mem doctor --json')}        Emit structured JSON
 
 ${pc.bold('IDE Identifiers')}:
-  claude-code, cursor, gemini-cli, opencode, openclaw,
-  windsurf, codex-cli, copilot-cli, antigravity, goose,
-  crush, roo-code, warp
+  claude-code, claude-desktop, cursor, gemini-cli, opencode,
+  openclaw, windsurf, codex-cli, kimi, copilot-cli, antigravity,
+  goose, crush, roo-code, warp
 `);
 }
 

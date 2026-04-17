@@ -9,8 +9,9 @@
 import { execSync } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { IS_WINDOWS } from '../utils/paths.js';
+import { claudeDesktopConfigPath } from '../../services/integrations/mcp/claude-desktop.js';
 
 // ---------------------------------------------------------------------------
 // IDE type and metadata
@@ -161,6 +162,23 @@ export function detectInstalledIDEs(): IDEInfo[] {
       detected: existsSync(join(home, '.warp')) || isCommandInPath('warp'),
       supported: true,
       hint: 'MCP-based integration',
+    },
+    {
+      id: 'kimi',
+      label: 'Kimi (CLI + VS Code)',
+      // Kimi Code CLI and the Kimi Code VS Code extension share ~/.kimi/.
+      // Detect either the config dir or the `kimi` binary on PATH.
+      detected: existsSync(join(home, '.kimi')) || isCommandInPath('kimi'),
+      supported: true,
+      hint: 'MCP-based integration (CLI + IDE share config)',
+    },
+    {
+      id: 'claude-desktop',
+      label: 'Claude Desktop',
+      // Platform-specific config directory — see integrations/mcp/claude-desktop.ts.
+      detected: existsSync(dirname(claudeDesktopConfigPath())),
+      supported: true,
+      hint: 'MCP-based integration (client companion to Claude Code)',
     },
   ];
 }

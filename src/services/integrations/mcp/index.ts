@@ -13,6 +13,8 @@ import { crushIntegration } from './crush.js';
 import { rooCodeIntegration } from './roo-code.js';
 import { warpIntegration } from './warp.js';
 import { gooseIntegration } from './goose.js';
+import { kimiIntegration } from './kimi.js';
+import { claudeDesktopIntegration } from './claude-desktop.js';
 
 export const MCP_INTEGRATIONS: Record<string, Integration> = {
   'copilot-cli': copilotCliIntegration,
@@ -21,6 +23,8 @@ export const MCP_INTEGRATIONS: Record<string, Integration> = {
   'roo-code': rooCodeIntegration,
   warp: warpIntegration,
   goose: gooseIntegration,
+  kimi: kimiIntegration,
+  'claude-desktop': claudeDesktopIntegration,
 };
 
 export {
@@ -30,4 +34,6 @@ export {
   rooCodeIntegration,
   warpIntegration,
   gooseIntegration,
+  kimiIntegration,
+  claudeDesktopIntegration,
 };
