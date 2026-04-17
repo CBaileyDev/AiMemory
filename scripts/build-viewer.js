@@ -32,14 +32,26 @@ async function buildViewer() {
       }
     });
 
-    // Copy HTML template to build output
+    // Copy HTML template to build output, inlining tokens.css so the token
+    // system is the last definition loaded and wins the cascade. See
+    // .plan/viewer-ui-direction.md section 1 for rationale.
     const htmlTemplate = fs.readFileSync(
       path.join(rootDir, 'src/ui/viewer-template.html'),
       'utf-8'
     );
+    const tokensCss = fs.readFileSync(
+      path.join(rootDir, 'src/ui/tokens.css'),
+      'utf-8'
+    );
+    // Inject at the very end of the first <style> block so token overrides
+    // beat any earlier custom-property declarations in the template.
+    const withTokens = htmlTemplate.replace(
+      /<\/style>/,
+      `\n/* --- inlined src/ui/tokens.css (Phase 1) --- */\n${tokensCss}\n</style>`
+    );
     fs.writeFileSync(
       path.join(rootDir, 'plugin/ui/viewer.html'),
-      htmlTemplate
+      withTokens
     );
 
     // Copy font assets
