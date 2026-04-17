@@ -97,6 +97,8 @@ import { SettingsRoutes } from './worker/http/routes/SettingsRoutes.js';
 import { LogsRoutes } from './worker/http/routes/LogsRoutes.js';
 import { MemoryRoutes } from './worker/http/routes/MemoryRoutes.js';
 import { CorpusRoutes } from './worker/http/routes/CorpusRoutes.js';
+import { DashboardRoutes } from './worker/http/routes/DashboardRoutes.js';
+import { AskRoutes } from './worker/http/routes/AskRoutes.js';
 
 // Knowledge agent services
 import { CorpusStore } from './worker/knowledge/CorpusStore.js';
@@ -303,6 +305,7 @@ export class WorkerService {
     this.server.registerRoutes(new SettingsRoutes(this.settingsManager));
     this.server.registerRoutes(new LogsRoutes());
     this.server.registerRoutes(new MemoryRoutes(this.dbManager, 'claude-mem'));
+    this.server.registerRoutes(new DashboardRoutes(this.dbManager, this.sessionManager, this.sseBroadcaster, this.startTime));
   }
 
   /**
@@ -395,7 +398,8 @@ export class WorkerService {
       );
       this.searchRoutes = new SearchRoutes(searchManager);
       this.server.registerRoutes(this.searchRoutes);
-      logger.info('WORKER', 'SearchManager initialized and search routes registered');
+      this.server.registerRoutes(new AskRoutes(searchManager));
+      logger.info('WORKER', 'SearchManager initialized and search + ask routes registered');
 
       // Register corpus routes (knowledge agents) — needs SearchOrchestrator from search module
       const { SearchOrchestrator } = await import('./worker/search/SearchOrchestrator.js');
