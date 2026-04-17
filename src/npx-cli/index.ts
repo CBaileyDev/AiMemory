@@ -14,6 +14,7 @@
  *   npx claude-mem status              → show worker status
  *   npx claude-mem search <query>      → search observations
  *   npx claude-mem transcript watch    → start transcript watcher
+ *   npx claude-mem ask <question>      → natural-language memory query with citations
  *   npx claude-mem doctor              → run system-wide self-diagnosis
  *   npx claude-mem doctor --ide <id>   → check a single IDE integration
  *   npx claude-mem doctor --fix        → attempt safe auto-repair
@@ -56,6 +57,7 @@ ${pc.bold('Runtime Commands')} (requires Bun, delegates to installed plugin):
   ${pc.cyan('npx claude-mem restart')}              Restart worker service
   ${pc.cyan('npx claude-mem status')}               Show worker status
   ${pc.cyan('npx claude-mem search <query>')}       Search observations
+  ${pc.cyan('npx claude-mem ask <question>')}       Natural-language memory query with citations
   ${pc.cyan('npx claude-mem transcript watch')}     Start transcript watcher
 
 ${pc.bold('Diagnostics')}:
@@ -152,6 +154,13 @@ async function main(): Promise<void> {
     case 'search': {
       const { runSearchCommand } = await import('./commands/runtime.js');
       await runSearchCommand(args.slice(1));
+      break;
+    }
+
+    // -- Ask ---------------------------------------------------------------
+    case 'ask': {
+      const { runAskCommand } = await import('./commands/ask.js');
+      await runAskCommand(args.slice(1));
       break;
     }
 
