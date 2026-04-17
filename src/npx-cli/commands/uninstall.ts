@@ -193,6 +193,19 @@ export async function runUninstallCommand(): Promise<void> {
       const { uninstallCodexCli } = await import('../../services/integrations/CodexCliInstaller.js');
       return uninstallCodexCli();
     }},
+    { label: 'MCP integrations', fn: async () => {
+      const { MCP_IDE_UNINSTALLERS } = await import('../../services/integrations/McpIntegrations.js');
+      let worstCode = 0;
+      for (const uninstaller of Object.values(MCP_IDE_UNINSTALLERS)) {
+        try {
+          const code = await uninstaller();
+          if (code !== 0) worstCode = code;
+        } catch {
+          // Skip silently per best-effort semantics.
+        }
+      }
+      return worstCode;
+    }},
   ];
 
   for (const { label, fn } of ideCleanups) {

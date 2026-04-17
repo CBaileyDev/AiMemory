@@ -10,3 +10,4 @@ export * from './WindsurfHooksInstaller.js';
 export * from './OpenClawInstaller.js';
 export * from './CodexCliInstaller.js';
 export * from './McpIntegrations.js';
+export { REGISTRY, ALL_IDE_IDS, getIntegration } from './registry.js';
