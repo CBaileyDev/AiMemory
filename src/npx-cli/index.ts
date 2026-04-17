@@ -14,6 +14,10 @@
  *   npx claude-mem status              → show worker status
  *   npx claude-mem search <query>      → search observations
  *   npx claude-mem transcript watch    → start transcript watcher
+ *   npx claude-mem doctor              → run system-wide self-diagnosis
+ *   npx claude-mem doctor --ide <id>   → check a single IDE integration
+ *   npx claude-mem doctor --fix        → attempt safe auto-repair
+ *   npx claude-mem doctor --json       → structured JSON output for CI
  *
  * This file is pure Node.js — Bun is NOT required for install commands.
  * Runtime commands (`start`, `stop`, etc.) delegate to Bun via the installed plugin.
@@ -53,6 +57,12 @@ ${pc.bold('Runtime Commands')} (requires Bun, delegates to installed plugin):
   ${pc.cyan('npx claude-mem status')}               Show worker status
   ${pc.cyan('npx claude-mem search <query>')}       Search observations
   ${pc.cyan('npx claude-mem transcript watch')}     Start transcript watcher
+
+${pc.bold('Diagnostics')}:
+  ${pc.cyan('npx claude-mem doctor')}               Run system self-diagnosis
+  ${pc.cyan('npx claude-mem doctor --ide <id>')}    Check a single IDE integration
+  ${pc.cyan('npx claude-mem doctor --fix')}         Attempt safe auto-repair
+  ${pc.cyan('npx claude-mem doctor --json')}        Emit structured JSON
 
 ${pc.bold('IDE Identifiers')}:
   claude-code, cursor, gemini-cli, opencode, openclaw,
@@ -142,6 +152,13 @@ async function main(): Promise<void> {
     case 'search': {
       const { runSearchCommand } = await import('./commands/runtime.js');
       await runSearchCommand(args.slice(1));
+      break;
+    }
+
+    // -- Doctor ------------------------------------------------------------
+    case 'doctor': {
+      const { runDoctorCommand } = await import('./commands/doctor.js');
+      await runDoctorCommand(args.slice(1));
       break;
     }
 
