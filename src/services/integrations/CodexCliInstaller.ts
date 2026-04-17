@@ -314,8 +314,20 @@ export function uninstallCodexCli(): number {
         delete config.schemas[CODEX_WATCH_NAME];
       }
 
-      writeTranscriptWatchConfig(config);
-      console.log(`  Removed codex watch from ${DEFAULT_CONFIG_PATH}`);
+      const hasRemainingWatches = config.watches.length > 0;
+      const hasRemainingSchemas = config.schemas && Object.keys(config.schemas).length > 0;
+
+      if (!hasRemainingWatches && !hasRemainingSchemas) {
+        // Nothing left besides the stateFile pointer — remove the file so
+        // install → uninstall is byte-symmetric for users without other
+        // transcript watchers configured.
+        const fs = require('fs');
+        fs.unlinkSync(DEFAULT_CONFIG_PATH);
+        console.log(`  Removed empty transcript-watch.json`);
+      } else {
+        writeTranscriptWatchConfig(config);
+        console.log(`  Removed codex watch from ${DEFAULT_CONFIG_PATH}`);
+      }
     } else {
       console.log('  No transcript-watch.json found -- nothing to remove.');
     }

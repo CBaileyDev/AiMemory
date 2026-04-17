@@ -267,9 +267,15 @@ describe('IDE: codex-cli', () => {
     const uninstall = runUninstaller(sandbox, 'codex-cli');
     expect(uninstall.exitCode).toBe(0);
 
-    const after = JSON.parse(readSandboxFile(watchPath)!);
-    expect(after.watches.some((w: any) => w.name === 'codex')).toBe(false);
-    expect(after.schemas?.codex).toBeUndefined();
+    // The file is deleted entirely when no other watches remain (Phase 10
+    // symmetry requirement), or the codex watch alone is removed if other
+    // watchers are configured. Both outcomes are acceptable.
+    const afterRaw = readSandboxFile(watchPath);
+    if (afterRaw !== null) {
+      const after = JSON.parse(afterRaw);
+      expect(after.watches.some((w: any) => w.name === 'codex')).toBe(false);
+      expect(after.schemas?.codex).toBeUndefined();
+    }
   });
 });
 

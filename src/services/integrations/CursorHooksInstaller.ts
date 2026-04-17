@@ -482,6 +482,28 @@ export function uninstallCursorHooks(target: CursorInstallTarget): number {
       console.log(`  Removed hooks.json`);
     }
 
+    // Remove claude-mem entry from mcp.json (preserving user-authored
+    // MCP servers). If the file is now empty, delete it.
+    const mcpJsonPath = path.join(targetDir, 'mcp.json');
+    if (existsSync(mcpJsonPath)) {
+      try {
+        const mcpConfig = JSON.parse(readFileSync(mcpJsonPath, 'utf-8')) as CursorMcpConfig;
+        if (mcpConfig?.mcpServers?.['claude-mem']) {
+          delete mcpConfig.mcpServers['claude-mem'];
+        }
+        const remaining = Object.keys(mcpConfig.mcpServers ?? {}).length;
+        if (remaining === 0) {
+          unlinkSync(mcpJsonPath);
+          console.log(`  Removed mcp.json (no other servers remained)`);
+        } else {
+          writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2));
+          console.log(`  Removed claude-mem entry from mcp.json (${remaining} server${remaining === 1 ? '' : 's'} preserved)`);
+        }
+      } catch (error) {
+        logger.warn('CURSOR', 'Could not clean mcp.json — leaving file intact to preserve user content', { error: (error as Error).message });
+      }
+    }
+
     // Remove context file and unregister if project-level
     if (target === 'project') {
       const contextFile = path.join(targetDir, 'rules', 'claude-mem-context.mdc');
