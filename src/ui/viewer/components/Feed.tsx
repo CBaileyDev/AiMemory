@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Observation, Summary, UserPrompt, FeedItem } from '../types';
 import { ObservationCard } from './ObservationCard';
 import { SummaryCard } from './SummaryCard';
@@ -13,42 +13,45 @@ interface FeedProps {
   onLoadMore: () => void;
   isLoading: boolean;
   hasMore: boolean;
+  highlightedId?: number | null;
+  freshIds: Set<number>;
+  sourcesDetected: string[];
 }
 
-export function Feed({ observations, summaries, prompts, onLoadMore, isLoading, hasMore }: FeedProps) {
+export function Feed({
+  observations, summaries, prompts, onLoadMore, isLoading, hasMore,
+  highlightedId, freshIds, sourcesDetected
+}: FeedProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(onLoadMore);
+  const cardRefs = useRef<Map<number, HTMLElement>>(new Map());
 
-  // Keep the callback ref up to date
+  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+
   useEffect(() => {
-    onLoadMoreRef.current = onLoadMore;
-  }, [onLoadMore]);
-
-  // Set up intersection observer for infinite scroll
-  useEffect(() => {
-    const element = loadMoreRef.current;
-    if (!element) return;
-
+    const el = loadMoreRef.current;
+    if (!el) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting && hasMore && !isLoading) {
-          onLoadMoreRef.current?.();
-        }
+        if (entries[0].isIntersecting && hasMore && !isLoading) onLoadMoreRef.current?.();
       },
       { threshold: UI.LOAD_MORE_THRESHOLD }
     );
-
-    observer.observe(element);
-
-    return () => {
-      if (element) {
-        observer.unobserve(element);
-      }
-      observer.disconnect();
-    };
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [hasMore, isLoading]);
+
+  // Scroll to + pulse a highlighted observation (from ask panel)
+  useEffect(() => {
+    if (highlightedId == null) return;
+    const node = cardRefs.current.get(highlightedId);
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.classList.add('am-card--fresh');
+    const timer = window.setTimeout(() => node.classList.remove('am-card--fresh'), 1200);
+    return () => window.clearTimeout(timer);
+  }, [highlightedId]);
 
   const items = useMemo<FeedItem[]>(() => {
     const combined = [
@@ -56,44 +59,85 @@ export function Feed({ observations, summaries, prompts, onLoadMore, isLoading, 
       ...summaries.map(s => ({ ...s, itemType: 'summary' as const })),
       ...prompts.map(p => ({ ...p, itemType: 'prompt' as const }))
     ];
-
     return combined.sort((a, b) => b.created_at_epoch - a.created_at_epoch);
   }, [observations, summaries, prompts]);
 
+  const isTrulyEmpty = items.length === 0 && !isLoading;
+
   return (
-    <div className="feed" ref={feedRef}>
+    <div className="am-feed" ref={feedRef}>
       <ScrollToTop targetRef={feedRef} />
-      <div className="feed-content">
-        {items.map(item => {
-          const key = `${item.itemType}-${item.id}`;
-          if (item.itemType === 'observation') {
-            return <ObservationCard key={key} observation={item} />;
-          } else if (item.itemType === 'summary') {
-            return <SummaryCard key={key} summary={item} />;
-          } else {
-            return <PromptCard key={key} prompt={item} />;
-          }
-        })}
-        {items.length === 0 && !isLoading && (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e' }}>
-            No items to display
-          </div>
-        )}
-        {isLoading && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#8b949e' }}>
-            <div className="spinner" style={{ display: 'inline-block', marginRight: '10px' }}></div>
-            Loading more...
-          </div>
-        )}
-        {hasMore && !isLoading && items.length > 0 && (
-          <div ref={loadMoreRef} style={{ height: '20px', margin: '10px 0' }} />
-        )}
-        {!hasMore && items.length > 0 && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#8b949e', fontSize: '14px' }}>
-            No more items to load
-          </div>
-        )}
-      </div>
+      {isTrulyEmpty ? (
+        <EmptyState sourcesDetected={sourcesDetected} />
+      ) : (
+        <div className="am-feed__content">
+          {items.map((item) => {
+            const cardKey = `${item.itemType}-${item.id}`;
+            const registerRef = (node: HTMLElement | null) => {
+              if (item.itemType === 'observation') {
+                if (node) cardRefs.current.set(item.id, node);
+                else cardRefs.current.delete(item.id);
+              }
+            };
+            const cardProps = {
+              pulseOnMount: item.itemType === 'observation' && freshIds.has(item.id)
+            };
+            if (item.itemType === 'observation') {
+              return (
+                <div key={cardKey} ref={registerRef as (el: HTMLDivElement | null) => void}>
+                  <ObservationCard observation={item} {...cardProps} />
+                </div>
+              );
+            }
+            if (item.itemType === 'summary') {
+              return <SummaryCard key={cardKey} summary={item} />;
+            }
+            return <PromptCard key={cardKey} prompt={item} />;
+          })}
+          {isLoading && (
+            <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-muted)' }}>
+              <div className="spinner" style={{ display: 'inline-block', marginRight: 'var(--space-2)' }}></div>
+              Loading more…
+            </div>
+          )}
+          {hasMore && !isLoading && items.length > 0 && (
+            <div ref={loadMoreRef} style={{ height: '20px', margin: 'var(--space-2) 0' }} />
+          )}
+          {!hasMore && items.length > 0 && (
+            <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+              End of feed
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ sourcesDetected }: { sourcesDetected: string[] }) {
+  return (
+    <div className="am-empty">
+      <div className="am-empty__headline">No memories yet</div>
+      <p className="am-empty__sub">
+        Start a session in any supported tool. Memories will appear here live.
+      </p>
+      {sourcesDetected.length > 0 && (
+        <div className="am-empty__sources">
+          {sourcesDetected.map(s => (
+            <span key={s} className="am-empty__source">
+              <span className="source-dot" data-source={s} /> {s}
+            </span>
+          ))}
+        </div>
+      )}
+      <a
+        href="https://docs.claude-mem.ai"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: 'var(--accent-primary)', fontSize: 'var(--text-sm)' }}
+      >
+        Read the setup guide →
+      </a>
     </div>
   );
 }
