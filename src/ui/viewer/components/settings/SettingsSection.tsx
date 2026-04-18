@@ -20,7 +20,7 @@ export function SettingsSection({ id, title, description, children }: SettingsSe
       id={`settings-section-${id}`}
       aria-labelledby={`settings-heading-${id}`}
       className="am-settings-section"
-      style={{ scrollMarginTop: 'var(--space-7)' }}
+      style={{ scrollMarginTop: 'var(--space-9)' }}
     >
       <Panel elevation={1} padding="card-padding">
         <Stack gap="4">

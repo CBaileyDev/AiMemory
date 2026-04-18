@@ -329,20 +329,20 @@ export function SettingsPage(props: SettingsPageProps) {
             )}
 
             <Stack gap="5" data-testid="settings-sections">
-              <div data-section-id="general">
+              <div data-section-id="general" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionGeneral values={formState} onChange={setValue} issues={issues} />
               </div>
-              <div data-section-id="sources">
+              <div data-section-id="sources" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionSources
                   sources={formState.__sources}
                   onChange={setSources}
                   detectedSourceIds={detectedSources}
                 />
               </div>
-              <div data-section-id="search">
+              <div data-section-id="search" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionSearch values={formState} onChange={setValue} issues={issues} />
               </div>
-              <div data-section-id="context-injection">
+              <div data-section-id="context-injection" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionContextInjection
                   values={formState}
                   onChange={setValue}
@@ -350,13 +350,13 @@ export function SettingsPage(props: SettingsPageProps) {
                   settings={settings}
                 />
               </div>
-              <div data-section-id="privacy">
+              <div data-section-id="privacy" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionPrivacy values={formState} onChange={setValue} issues={issues} />
               </div>
-              <div data-section-id="mcp">
+              <div data-section-id="mcp" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionMcp />
               </div>
-              <div data-section-id="about">
+              <div data-section-id="about" style={{ scrollMarginTop: 'var(--space-9)' }}>
                 <SectionAbout />
               </div>
             </Stack>

@@ -253,7 +253,7 @@ export const SECTION_CONTEXT: SettingsSectionDef = {
   id: 'context-injection',
   title: 'Context injection',
   description:
-    'Controls the context block rendered on SessionStart. The live preview on the right reflects the current form state.',
+    'Controls the context block rendered on SessionStart. The live preview at the bottom of this section reflects the current form state.',
   groups: [
     {
       id: 'loading',

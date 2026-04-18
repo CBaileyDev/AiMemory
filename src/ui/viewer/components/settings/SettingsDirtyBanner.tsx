@@ -34,7 +34,7 @@ export function SettingsDirtyBanner({
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        marginBottom: 'var(--space-4)',
+        marginBottom: 'var(--space-5)',
         padding: 'var(--space-3) var(--space-4)',
         borderRadius: 'var(--radius-md)',
         background: visible
@@ -47,6 +47,7 @@ export function SettingsDirtyBanner({
           : tone === 'error'
             ? 'var(--accent-error)'
             : 'var(--accent-success)'}`,
+        boxShadow: 'var(--elev-1)',
         color: visible
           ? 'var(--accent-primary)'
           : tone === 'error'
