@@ -14,7 +14,8 @@ const PORT = process.env.CLAUDE_MEM_VIEWER_TEST_PORT ?? '37781';
 
 export default defineConfig({
   testDir: './tests/viewer',
-  testMatch: /.*\.spec\.ts/,
+  // Use .pw.ts so Bun's test runner does not pick these up as unit tests (see bunfig.toml).
+  testMatch: /.*\.pw\.ts/,
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,     // single dev worker; serialize specs

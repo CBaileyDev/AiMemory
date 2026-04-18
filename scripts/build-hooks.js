@@ -270,10 +270,11 @@ async function buildHooks() {
     // structural symptom (worker-service.ts dragged into the bundle blew the
     // size from ~358KB to ~1.96MB) regardless of how the imports look.
     //
-    // 600KB is a generous ceiling — current size is ~384KB, the broken v12.0.0
-    // bundle was ~1920KB, and there's plenty of headroom for legitimate growth
-    // before we'd want to revisit this number.
-    const MCP_SERVER_MAX_BYTES = 600 * 1024;
+    // The MCP bundle includes smart-file-read (tree-sitter + helpers) and sits
+    // around 5–6 MiB minified. Keep a ceiling to catch accidental inclusion of
+    // the full worker/SQLite stack (broken v12.0.0 bundle was ~1.9 MiB before
+    // tree-sitter; a worker leak blows past tens of MiB).
+    const MCP_SERVER_MAX_BYTES = 8 * 1024 * 1024;
     if (mcpServerStats.size > MCP_SERVER_MAX_BYTES) {
       throw new Error(
         `mcp-server.cjs is ${(mcpServerStats.size / 1024).toFixed(2)} KB, exceeding the ${(MCP_SERVER_MAX_BYTES / 1024).toFixed(0)} KB budget. This usually means a transitive import pulled worker-service.ts (or another heavy module) into the MCP bundle. The MCP server is supposed to be a thin HTTP wrapper — audit recent imports in src/servers/mcp-server.ts and src/services/worker-spawner.ts. See PR #1645 for context on why this guardrail exists.`
