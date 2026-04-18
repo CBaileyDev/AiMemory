@@ -66,6 +66,7 @@
   --color-bg-input: #ffffff;
   --color-bg-overlay: rgb(255 255 255 / 92%);
   --color-bg-backdrop: rgb(20 19 17 / 40%);
+  --color-bg-tooltip: #18181b;
 
   --color-border-primary: var(--neutral-200);
   --color-border-secondary: var(--neutral-200);
@@ -168,6 +169,7 @@
   --motion-ui: 120ms;
   --motion-card: 180ms;
   --motion-modal: 240ms;
+  --duration-ui: var(--motion-ui);
   --ease-in: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -229,6 +231,7 @@
   --color-bg-input: var(--neutral-200);
   --color-bg-overlay: rgb(22 21 19 / 92%);
   --color-bg-backdrop: rgb(0 0 0 / 60%);
+  --color-bg-tooltip: #f4f4f5;
 
   --color-border-primary: var(--neutral-300);
   --color-border-secondary: var(--neutral-300);
