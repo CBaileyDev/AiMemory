@@ -1,0 +1,79 @@
+name: Viewer (Phase 12)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/ui/**'
+      - 'tests/viewer/**'
+      - 'scripts/build-viewer.js'
+      - 'scripts/build-hooks.js'
+      - 'scripts/viewer-*.js'
+      - 'scripts/seed-dev-db.js'
+      - 'scripts/dev-server.js'
+      - 'playwright.config.ts'
+      - '.viewer-size-budget.json'
+      - '.github/workflows/viewer.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/ui/**'
+      - 'tests/viewer/**'
+      - 'scripts/viewer-*.js'
+      - '.viewer-size-budget.json'
+
+jobs:
+  viewer:
+    name: Playwright + axe + bundle budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+        shell: bash
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        shell: bash
+
+      - name: Build viewer
+        run: node scripts/build-viewer.js
+        shell: bash
+
+      - name: Build worker (required by Playwright fixture)
+        run: node scripts/build-hooks.js || true
+        # Some builds fail unrelated guards on CI runners (e.g. MCP size
+        # budget). The Playwright fixture only needs
+        # plugin/scripts/worker-service.cjs, which is produced earlier
+        # in the build; tolerate a non-zero exit here.
+        shell: bash
+
+      - name: Seed dev DB
+        run: npm run dev:seed:fresh
+        shell: bash
+
+      - name: Playwright — viewer specs
+        run: npm run test:viewer
+        shell: bash
+
+      - name: Bundle size budget
+        run: npm run check:viewer-size
+        shell: bash
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

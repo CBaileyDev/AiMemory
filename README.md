@@ -272,9 +272,18 @@ scripts/
   verification-matrix.js     → Phase 10 install/doctor/uninstall gate
 tests/
   e2e/               → fake-HOME harness + 11 test files (105 tests)
+  viewer/            → Playwright viewer specs + axe audit (Phase 12)
 docs/public/
   CONTRIBUTING.md    → contributor guide
+  PERFORMANCE.md     → viewer performance budgets, gates, and how to run them
 ```
+
+### Viewer performance
+
+The React viewer has its own Playwright + axe-core + bundle-budget CI
+(`.github/workflows/viewer.yml`) plus optional Lighthouse + SSE-load
+scripts. See [`docs/public/PERFORMANCE.md`](docs/public/PERFORMANCE.md)
+for the contract and how to reproduce each gate locally.
 
 ---
 

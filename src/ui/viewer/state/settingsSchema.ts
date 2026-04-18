@@ -46,6 +46,8 @@ export interface SettingsField {
   options?: SelectOption[];                // for kind: 'select'
   placeholder?: string;                    // for kind: 'text'|'password'|'number'|'textarea'
   multiline?: { rows: number };            // for kind: 'textarea'
+  /** Fallback value used when the settings file has no value for `key`. */
+  defaultValue?: string;
   /** When present, field is only shown if `formState[key] === value` holds for another key. */
   visibleWhen?: { key: keyof Settings | string; equals: string };
   /** When present, field is only shown if any of the values match. */
@@ -122,6 +124,7 @@ export const SECTION_GENERAL: SettingsSectionDef = {
       key: 'CLAUDE_MEM_LOG_LEVEL',
       label: 'Log level',
       kind: 'select',
+      defaultValue: 'INFO',
       options: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARN', label: 'Warn' },
@@ -195,7 +198,8 @@ export const SECTION_SEARCH: SettingsSectionDef = {
       label: 'Project boost',
       hint: 'Multiplier applied when a result belongs to the current project. 1.0 = no boost.',
       kind: 'number',
-      number: SEARCH_BOOST_RANGE
+      number: SEARCH_BOOST_RANGE,
+      defaultValue: '1.5'
     },
     {
       id: 'search-useful-boost',
@@ -203,7 +207,8 @@ export const SECTION_SEARCH: SettingsSectionDef = {
       label: 'Useful boost',
       hint: 'Multiplier for observations a user has marked useful. Phase-in gradually.',
       kind: 'number',
-      number: SEARCH_BOOST_RANGE
+      number: SEARCH_BOOST_RANGE,
+      defaultValue: '1.2'
     },
     {
       id: 'search-halflife',
@@ -211,7 +216,8 @@ export const SECTION_SEARCH: SettingsSectionDef = {
       label: 'Freshness half-life',
       hint: 'Scores decay exponentially; half-life in days.',
       kind: 'number',
-      number: SEARCH_HALFLIFE_RANGE
+      number: SEARCH_HALFLIFE_RANGE,
+      defaultValue: '30'
     },
     {
       id: 'search-dedupe',
@@ -219,14 +225,16 @@ export const SECTION_SEARCH: SettingsSectionDef = {
       label: 'Dedupe threshold',
       hint: 'Cosine similarity above this collapses near-duplicate results. 0.5–0.99.',
       kind: 'number',
-      number: DEDUPE_RANGE
+      number: DEDUPE_RANGE,
+      defaultValue: '0.92'
     },
     {
       id: 'search-semantic-inject',
       key: 'CLAUDE_MEM_SEMANTIC_INJECT',
       label: 'Semantic context injection',
       hint: 'Inject the most relevant observations on every UserPromptSubmit. Experimental.',
-      kind: 'toggle'
+      kind: 'toggle',
+      defaultValue: 'false'
     },
     {
       id: 'search-semantic-limit',
@@ -235,6 +243,7 @@ export const SECTION_SEARCH: SettingsSectionDef = {
       hint: 'Top-N observations to inject per prompt when semantic injection is on.',
       kind: 'number',
       number: SEMANTIC_LIMIT_RANGE,
+      defaultValue: '5',
       visibleWhen: { key: 'CLAUDE_MEM_SEMANTIC_INJECT', equals: 'true' }
     }
   ]

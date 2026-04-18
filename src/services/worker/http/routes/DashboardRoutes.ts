@@ -10,9 +10,8 @@
  */
 
 import express, { Request, Response } from 'express';
-import path from 'path';
 import { statSync, existsSync } from 'fs';
-import { homedir } from 'os';
+import { DB_PATH } from '../../../../shared/paths.js';
 import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { DatabaseManager } from '../../DatabaseManager.js';
 import { SessionManager } from '../../SessionManager.js';
@@ -136,7 +135,7 @@ export class DashboardRoutes extends BaseRouteHandler {
   });
 
   private handleHealth = this.wrapHandler((_req: Request, res: Response): void => {
-    const dbPath = path.join(homedir(), '.claude-mem', 'claude-mem.db');
+    const dbPath = DB_PATH;
     const dbSize = existsSync(dbPath) ? statSync(dbPath).size : 0;
     const uptime = Math.floor((Date.now() - this.startTime) / 1000);
 

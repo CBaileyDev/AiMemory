@@ -9,7 +9,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { getPackageRoot } from '../../../../shared/paths.js';
+import { getPackageRoot, USER_SETTINGS_PATH } from '../../../../shared/paths.js';
 import { logger } from '../../../../utils/logger.js';
 import { SettingsManager } from '../../SettingsManager.js';
 import { getBranchInfo, switchBranch, pullUpdates } from '../../BranchManager.js';
@@ -44,10 +44,30 @@ export class SettingsRoutes extends BaseRouteHandler {
    * Get environment settings (from ~/.claude-mem/settings.json)
    */
   private handleGetSettings = this.wrapHandler((req: Request, res: Response): void => {
-    const settingsPath = path.join(homedir(), '.claude-mem', 'settings.json');
+    const settingsPath = USER_SETTINGS_PATH;
     this.ensureSettingsFile(settingsPath);
-    const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
-    res.json(settings);
+    const typed = SettingsDefaultsManager.loadFromFile(settingsPath);
+
+    // Also surface any raw keys persisted in the file that are not yet
+    // declared in SettingsDefaults. This lets the Settings UI round-trip
+    // Phase 12 keys (search reranker tuning, per-source `sources` block,
+    // excluded projects) without requiring a schema change in the
+    // shared SettingsDefaultsManager.
+    let extras: Record<string, unknown> = {};
+    try {
+      if (existsSync(settingsPath)) {
+        const raw = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (!(k in typed)) extras[k] = v;
+          }
+        }
+      }
+    } catch {
+      extras = {};
+    }
+
+    res.json({ ...typed, ...extras });
   });
 
   /**
@@ -65,7 +85,7 @@ export class SettingsRoutes extends BaseRouteHandler {
     }
 
     // Read existing settings
-    const settingsPath = path.join(homedir(), '.claude-mem', 'settings.json');
+    const settingsPath = USER_SETTINGS_PATH;
     this.ensureSettingsFile(settingsPath);
     let settings: any = {};
 
@@ -124,7 +144,25 @@ export class SettingsRoutes extends BaseRouteHandler {
       'CLAUDE_MEM_CONTEXT_SHOW_LAST_SUMMARY',
       'CLAUDE_MEM_CONTEXT_SHOW_LAST_MESSAGE',
       'CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED',
+      // Search reranker (Phase 12 Settings page)
+      'CLAUDE_MEM_SEARCH_PROJECT_BOOST',
+      'CLAUDE_MEM_SEARCH_USEFUL_BOOST',
+      'CLAUDE_MEM_SEARCH_HALFLIFE_DAYS',
+      'CLAUDE_MEM_SEARCH_DEDUPE_THRESHOLD',
+      // Semantic context injection (Phase 12 Settings page)
+      'CLAUDE_MEM_SEMANTIC_INJECT',
+      'CLAUDE_MEM_SEMANTIC_INJECT_LIMIT',
+      // Privacy (Phase 12 Settings page)
+      'CLAUDE_MEM_EXCLUDED_PROJECTS',
+      'CLAUDE_MEM_FOLDER_MD_EXCLUDE',
     ];
+
+    // Allow the Sources section to persist its per-IDE tuning block. The
+    // adapters read settings['sources'][<ide>] before emitting observations.
+    if (req.body.sources !== undefined && req.body.sources !== null
+        && typeof req.body.sources === 'object' && !Array.isArray(req.body.sources)) {
+      settings.sources = req.body.sources;
+    }
 
     for (const key of settingKeys) {
       if (req.body[key] !== undefined) {

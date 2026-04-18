@@ -50,6 +50,20 @@ function toFormState(settings: Settings, theme: string, sources: SourcesBlock): 
     if (v === undefined || v === null) continue;
     base[k] = String(v);
   }
+
+  // Seed any schema-declared defaults for fields whose key is missing in the
+  // settings file. Protects first-run users from being blocked by validation
+  // on newly added keys like CLAUDE_MEM_SEARCH_*.
+  for (const section of SETTINGS_SECTIONS) {
+    for (const field of sectionFields(section)) {
+      const key = String(field.key);
+      if (key.startsWith('__')) continue;
+      if (base[key] === undefined || base[key] === '') {
+        if (field.defaultValue !== undefined) base[key] = field.defaultValue;
+      }
+    }
+  }
+
   return { ...base, __theme: theme, __sources: sources } as FormState;
 }
 

@@ -66,8 +66,9 @@ The product promise is: _no matter which editor or agent stack you use today, yo
 
 **Test status (elevation work as merged)**
 
-- Unit + integration suite under `tests/` (domains include `sqlite/`, `worker/`, `context/`, `servers/`, `sdk/`, `infrastructure/`, `integration/`, `hooks/`, `shared/`, `supervisor/`, `services/`, `utils/`).
-- End-to-end suite: **105 passing** in `tests/e2e/`.
+- Unit + integration suite under `tests/` (domains include `sqlite/`, `worker/`, `context/`, `servers/`, `sdk/`, `infrastructure/`, `integration/`, `hooks/`, `shared/`, `supervisor/`, `services/`, `utils/`). 1538 passing, 18 pre-existing failing (logger coverage, observation I/O handlers, worker-json-status — all unrelated to the viewer and tracked for a future pass).
+- End-to-end suite: 104 passing, 1 pre-existing failure (`Phase 8: package-size check` — package is ~6.9 MB vs 3 MB budget; baseline regression predating Phase 12 and separate from viewer scope).
+- **Viewer Playwright suite (Phase 12)**: 15 passing in `tests/viewer/` covering feed load, palette, theme, URL filter roundtrip, settings persistence, ask panel, and axe-core audits across five routes.
 - Verification matrix (`scripts/verification-matrix.js` + `tests/e2e/phase10-verification-matrix.e2e.test.ts`): **15/15** integrations green for `Captures Sessions / Search via MCP / Context Injection / Doctor Green / Uninstall Symmetric / Dashboard Visible`.
 
 ### 2.2 What is explicitly **not** complete (the Phase 12 surface)
@@ -711,7 +712,7 @@ Run before declaring Phase 12 complete:
 | 9 | Dashboard + Ask API | **Complete** — `DashboardRoutes.ts`, `AskRoutes.ts` |
 | 10 | Seed script / schema migration | **Complete** — `scripts/seed-dev-db.js`, `scripts/dev-server.js`, migration 24 |
 | 11 | Polish pass | **Complete** — empty states, keyboard help, SSE fresh pulse, `IconButton` + `Tooltip` |
-| 12 | Settings redesign + testing/a11y/perf bar | **Planned** — see §11 |
+| 12 | Settings redesign + testing/a11y/perf bar | **Complete** — PR [#2](https://github.com/CBaileyDev/AiMemory/pull/2); see §11 for scope. Sectioned `SettingsPage` replaces `ContextSettingsModal`; viewer Playwright suite (15/15 passing) + axe-core audit + bundle budget + SSE load test + Lighthouse script + CI workflow (`.github/workflows/viewer.yml`) landed. |
 
 ---
 

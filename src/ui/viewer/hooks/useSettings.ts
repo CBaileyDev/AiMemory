@@ -10,46 +10,24 @@ export function useSettings() {
   const [saveStatus, setSaveStatus] = useState('');
 
   useEffect(() => {
-    // Load initial settings
     fetch(API_ENDPOINTS.SETTINGS)
       .then(res => res.json())
       .then(data => {
-        // Use ?? (nullish coalescing) instead of || so that falsy values
-        // like '0', 'false', and '' from the backend are preserved.
-        // Using || would silently replace them with the UI defaults.
-        setSettings({
-          CLAUDE_MEM_MODEL: data.CLAUDE_MEM_MODEL ?? DEFAULT_SETTINGS.CLAUDE_MEM_MODEL,
-          CLAUDE_MEM_CONTEXT_OBSERVATIONS: data.CLAUDE_MEM_CONTEXT_OBSERVATIONS ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_OBSERVATIONS,
-          CLAUDE_MEM_WORKER_PORT: data.CLAUDE_MEM_WORKER_PORT ?? DEFAULT_SETTINGS.CLAUDE_MEM_WORKER_PORT,
-          CLAUDE_MEM_WORKER_HOST: data.CLAUDE_MEM_WORKER_HOST ?? DEFAULT_SETTINGS.CLAUDE_MEM_WORKER_HOST,
-
-          // AI Provider Configuration
-          CLAUDE_MEM_PROVIDER: data.CLAUDE_MEM_PROVIDER ?? DEFAULT_SETTINGS.CLAUDE_MEM_PROVIDER,
-          CLAUDE_MEM_GEMINI_API_KEY: data.CLAUDE_MEM_GEMINI_API_KEY ?? DEFAULT_SETTINGS.CLAUDE_MEM_GEMINI_API_KEY,
-          CLAUDE_MEM_GEMINI_MODEL: data.CLAUDE_MEM_GEMINI_MODEL ?? DEFAULT_SETTINGS.CLAUDE_MEM_GEMINI_MODEL,
-          CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED: data.CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED ?? DEFAULT_SETTINGS.CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED,
-
-          // OpenRouter Configuration
-          CLAUDE_MEM_OPENROUTER_API_KEY: data.CLAUDE_MEM_OPENROUTER_API_KEY ?? DEFAULT_SETTINGS.CLAUDE_MEM_OPENROUTER_API_KEY,
-          CLAUDE_MEM_OPENROUTER_MODEL: data.CLAUDE_MEM_OPENROUTER_MODEL ?? DEFAULT_SETTINGS.CLAUDE_MEM_OPENROUTER_MODEL,
-          CLAUDE_MEM_OPENROUTER_SITE_URL: data.CLAUDE_MEM_OPENROUTER_SITE_URL ?? DEFAULT_SETTINGS.CLAUDE_MEM_OPENROUTER_SITE_URL,
-          CLAUDE_MEM_OPENROUTER_APP_NAME: data.CLAUDE_MEM_OPENROUTER_APP_NAME ?? DEFAULT_SETTINGS.CLAUDE_MEM_OPENROUTER_APP_NAME,
-
-          // Token Economics Display
-          CLAUDE_MEM_CONTEXT_SHOW_READ_TOKENS: data.CLAUDE_MEM_CONTEXT_SHOW_READ_TOKENS ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_READ_TOKENS,
-          CLAUDE_MEM_CONTEXT_SHOW_WORK_TOKENS: data.CLAUDE_MEM_CONTEXT_SHOW_WORK_TOKENS ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_WORK_TOKENS,
-          CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_AMOUNT: data.CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_AMOUNT ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_AMOUNT,
-          CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_PERCENT: data.CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_PERCENT ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_SAVINGS_PERCENT,
-
-          // Display Configuration
-          CLAUDE_MEM_CONTEXT_FULL_COUNT: data.CLAUDE_MEM_CONTEXT_FULL_COUNT ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_FULL_COUNT,
-          CLAUDE_MEM_CONTEXT_FULL_FIELD: data.CLAUDE_MEM_CONTEXT_FULL_FIELD ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_FULL_FIELD,
-          CLAUDE_MEM_CONTEXT_SESSION_COUNT: data.CLAUDE_MEM_CONTEXT_SESSION_COUNT ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SESSION_COUNT,
-
-          // Feature Toggles
-          CLAUDE_MEM_CONTEXT_SHOW_LAST_SUMMARY: data.CLAUDE_MEM_CONTEXT_SHOW_LAST_SUMMARY ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_LAST_SUMMARY,
-          CLAUDE_MEM_CONTEXT_SHOW_LAST_MESSAGE: data.CLAUDE_MEM_CONTEXT_SHOW_LAST_MESSAGE ?? DEFAULT_SETTINGS.CLAUDE_MEM_CONTEXT_SHOW_LAST_MESSAGE,
-        });
+        // Preserve EVERY key the server returns (server may include keys
+        // that predate or post-date the typed Settings interface, e.g.
+        // CLAUDE_MEM_SEMANTIC_INJECT / CLAUDE_MEM_SEARCH_* introduced in
+        // Phase 12). ?? (nullish coalescing) keeps falsy values like
+        // '0', 'false', '' from being silently replaced with defaults.
+        const merged: Record<string, string> = {};
+        for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+          merged[k] = data[k] ?? v;
+        }
+        for (const [k, v] of Object.entries(data ?? {})) {
+          if (!(k in merged) && typeof v === 'string') {
+            merged[k] = v;
+          }
+        }
+        setSettings(merged as Settings);
       })
       .catch(error => {
         console.error('Failed to load settings:', error);

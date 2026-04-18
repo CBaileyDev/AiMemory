@@ -97,6 +97,12 @@
     "test:infra": "bun test tests/infrastructure/",
     "test:server": "bun test tests/server/",
     "test:e2e": "bun test tests/e2e/",
+    "test:viewer": "playwright test",
+    "test:viewer:axe": "playwright test axe-audit.spec.ts",
+    "test:viewer:ui": "playwright test --ui",
+    "check:viewer-size": "node scripts/viewer-bundle-budget.js",
+    "check:viewer-sse": "node scripts/viewer-sse-load-test.js",
+    "check:viewer-lighthouse": "node scripts/viewer-lighthouse.js",
     "typecheck": "tsc --noEmit",
     "check:versions": "node scripts/check-version-consistency.js",
     "check:size": "node scripts/check-package-size.js",
@@ -136,7 +142,9 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
     "@derekstride/tree-sitter-sql": "^0.3.11",
+    "@playwright/test": "^1.59.1",
     "@tree-sitter-grammars/tree-sitter-lua": "^0.4.1",
     "@tree-sitter-grammars/tree-sitter-markdown": "^0.3.2",
     "@tree-sitter-grammars/tree-sitter-toml": "^0.7.0",

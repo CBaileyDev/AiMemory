@@ -1,0 +1,7 @@
+{
+  "description": "Viewer bundle size budget — enforced by scripts/viewer-bundle-budget.js. Raises require a PR note explaining why.",
+  "path": "plugin/ui/viewer-bundle.js",
+  "maxMinifiedBytes": 400000,
+  "maxGzippedBytes": 130000,
+  "note": "Phase 12 baseline: 322247 raw / 101126 gzip. Budget set to +~20% to absorb near-term growth."
+}
