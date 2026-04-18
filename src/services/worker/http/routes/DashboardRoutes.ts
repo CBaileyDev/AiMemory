@@ -11,6 +11,7 @@
 
 import express, { Request, Response } from 'express';
 import { statSync, existsSync } from 'fs';
+import { logger } from '../../../../utils/logger.js';
 import { DB_PATH } from '../../../../shared/paths.js';
 import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { DatabaseManager } from '../../DatabaseManager.js';
@@ -111,6 +112,8 @@ export class DashboardRoutes extends BaseRouteHandler {
       const idx = Math.min(6, Math.max(0, 6 - b.days_ago));
       entry.sevenDay[idx] += b.count;
     }
+
+    logger.debug('HTTP', 'dashboard sources snapshot', { sourceCount: Object.keys(bySource).length });
 
     // Overall totals
     const totalObservations = Object.values(bySource).reduce((a, b) => a + b.total, 0);

@@ -1,3 +1,5 @@
+import { logger } from '../../../utils/logger.js';
+
 /**
  * Phase 6 — search result reranker.
  *
@@ -129,7 +131,9 @@ export function rerank<T extends AnyResult>(
 
   scored.sort((a, b) => b.finalScore - a.finalScore);
 
-  return opts.dedupe ? dedupeScored(scored, opts.dedupeSimilarityThreshold) : scored;
+  const output = opts.dedupe ? dedupeScored(scored, opts.dedupeSimilarityThreshold) : scored;
+  logger.debug('WORKER', 'rerank complete', { inputCount: results.length, outputCount: output.length });
+  return output;
 }
 
 // ---------------------------------------------------------------------------

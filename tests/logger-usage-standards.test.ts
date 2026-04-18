@@ -40,6 +40,8 @@ const EXCLUDED_PATTERNS = [
   /services\/transcripts\/cli\.ts$/,  // CLI transcript subcommands use console.log for user-visible interactive output
   /^npx-cli\/commands\//,    // NPX CLI commands write user-facing terminal output
   /services\/integrations\/McpIntegrations\.ts$/, // MCP installers are interactive CLI output
+  /integrations\/mcp\/goose\.ts$/, // MCP installer — user-facing console output (same pattern as McpIntegrations)
+  /integrations\/mcp\/_shared\.ts$/, // MCP installer factory — user-facing console output
 ];
 
 // Files that should always use logger (core business logic)

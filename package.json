@@ -98,7 +98,7 @@
     "test:server": "bun test tests/server/",
     "test:e2e": "bun test tests/e2e/",
     "test:viewer": "playwright test",
-    "test:viewer:axe": "playwright test axe-audit.spec.ts",
+    "test:viewer:axe": "playwright test axe-audit.pw.ts",
     "test:viewer:ui": "playwright test --ui",
     "check:viewer-size": "node scripts/viewer-bundle-budget.js",
     "check:viewer-sse": "node scripts/viewer-sse-load-test.js",

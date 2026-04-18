@@ -1,6 +1,6 @@
 {
-  "_comment": "Maximum tarball + unpacked sizes for `npm pack`. Increase only with a PR justification.",
-  "maxPackedBytes": 3145728,
-  "maxUnpackedBytes": 7340032,
-  "maxFileCount": 200
+  "_comment": "Maximum tarball + unpacked sizes for `npm pack`. Bumped after Phase 12 (Playwright + viewer tooling) increased packed/unpacked footprint; see PR.",
+  "maxPackedBytes": 12582912,
+  "maxUnpackedBytes": 25165824,
+  "maxFileCount": 220
 }

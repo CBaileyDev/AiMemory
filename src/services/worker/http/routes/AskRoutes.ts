@@ -9,6 +9,7 @@
  */
 
 import express, { Request, Response } from 'express';
+import { logger } from '../../../../utils/logger.js';
 import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { SearchManager } from '../../SearchManager.js';
 
@@ -38,6 +39,8 @@ export class AskRoutes extends BaseRouteHandler {
       this.badRequest(res, 'question is required and must be a non-empty string');
       return;
     }
+
+    logger.debug('HTTP', 'ask request', { hasProject: typeof project === 'string' && project.length > 0 });
     const cap = Math.min(Math.max(parseInt(String(limit ?? 8), 10) || 8, 1), 20);
 
     const result: any = await this.searchManager.search({
