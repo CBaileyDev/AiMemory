@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Feed } from './components/Feed';
-import { ContextSettingsModal } from './components/ContextSettingsModal';
+import { SettingsPage } from './components/settings/SettingsPage';
 import { LogsDrawer } from './components/LogsModal';
 import { SourceStrip } from './components/SourceStrip';
 import { FilterSummary } from './components/FilterSummary';
@@ -246,14 +246,18 @@ export function App() {
 
       {route === 'sources' && <SourcesDashboard />}
 
-      <ContextSettingsModal
-        isOpen={contextPreviewOpen}
-        onClose={() => setContextPreviewOpen(false)}
-        settings={settings}
-        onSave={saveSettings}
-        isSaving={isSaving}
-        saveStatus={saveStatus}
-      />
+      {contextPreviewOpen && (
+        <SettingsPage
+          settings={settings}
+          onSave={saveSettings}
+          isSaving={isSaving}
+          saveStatus={saveStatus}
+          theme={preference}
+          onThemeChange={setThemePreference}
+          detectedSources={sources}
+          onClose={() => setContextPreviewOpen(false)}
+        />
+      )}
 
       <CommandPalette
         isOpen={paletteOpen}
