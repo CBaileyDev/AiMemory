@@ -1,7 +1,5 @@
 /**
- * Session Complete Handler - Stop (Phase 2)
- *
- * Completes the session after summarize has been queued.
+ * Session Complete Handler — completes the session after summarize has been queued.
  * This removes the session from the active sessions map, allowing
  * the orphan reaper to clean up any remaining subprocess.
  *

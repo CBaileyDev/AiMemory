@@ -1,7 +1,7 @@
 /**
  * `npx claude-mem ask <question>` — natural-language memory query.
  *
- * Phase 6 elevation of `/mem-search`. Unlike `search`, which returns raw
+ * Unlike `search`, which returns raw
  * JSON, `ask` produces a human-readable answer with citations to specific
  * observation ids.
  *

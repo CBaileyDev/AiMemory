@@ -1,7 +1,5 @@
 /**
- * Ask Routes — Viewer UI 2.0 Phase 7
- *
- * POST /api/ask { question, limit?, project? } → { synthesis | null, citations[] }
+ * Ask Routes — POST /api/ask { question, limit?, project? } → { synthesis | null, citations[] }
  *
  * Synthesis is always null in this open-source path; the default surface is
  * the citation list. A future extension may plug in a model (gated on

@@ -1,8 +1,7 @@
 /**
  * Shared tokenizer for AiMemory.
  *
- * Phase 1.1 of the AiMemory roadmap replaces the ubiquitous
- * `Math.ceil(text.length / 4)` estimator with a real BPE tokenizer.
+ * Uses a real BPE tokenizer instead of the `Math.ceil(text.length / 4)` estimator.
  *
  * Design notes:
  * - Uses `js-tiktoken` (pure JS, no WASM) so it works identically under Bun,

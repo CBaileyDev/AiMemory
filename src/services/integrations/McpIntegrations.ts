@@ -1,15 +1,11 @@
 /**
  * McpIntegrations — backwards-compatible shim over the per-IDE files in
- * `./mcp/`. Kept so existing imports (e.g. from `src/npx-cli/commands/install.ts`)
- * continue to work after the Phase 2 split.
- *
- * New code should import from `./mcp/` directly.
+ * `./mcp/`. New code should import from `./mcp/` directly.
  */
 
 import { MCP_INTEGRATIONS } from './mcp/index.js';
 
-// Re-export the registry directly. Preserve the pre-Phase-2 signature:
-//   `() => Promise<number>` that returns 0 on success, 1 on failure.
+// Re-export the registry directly. Signature: `() => Promise<number>`, 0 on success, 1 on failure.
 export const MCP_IDE_INSTALLERS: Record<string, () => Promise<number>> = Object
   .fromEntries(
     Object.entries(MCP_INTEGRATIONS).map(([id, integration]) => [
@@ -19,8 +15,7 @@ export const MCP_IDE_INSTALLERS: Record<string, () => Promise<number>> = Object
   );
 
 /**
- * Companion to `MCP_IDE_INSTALLERS`: the uninstaller dispatch map. This is
- * the new Phase 2 export and closes the symmetric-uninstall gap for MCP IDEs.
+ * Companion to `MCP_IDE_INSTALLERS`: the uninstaller dispatch map.
  */
 export const MCP_IDE_UNINSTALLERS: Record<string, () => Promise<number>> = Object
   .fromEntries(

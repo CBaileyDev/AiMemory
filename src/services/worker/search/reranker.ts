@@ -1,16 +1,14 @@
 import { logger } from '../../../utils/logger.js';
 
 /**
- * Phase 6 — search result reranker.
+ * Search result reranker.
  *
  * Takes a pre-scored list of search results and applies four boosts /
  * decays on top of the base relevance score:
  *
  *   1. Project boost   — results from the current project rank higher.
- *   2. Useful boost    — results flagged `useful` (future Phase 5 feedback
- *                        loop) get an extra multiplier. Safe to apply
- *                        pre-feedback-landing because unflagged rows are
- *                        unaffected.
+ *   2. Useful boost    — results flagged `useful` get an extra multiplier;
+ *                        unflagged rows are unaffected.
  *   3. Age decay       — exponential half-life so stale observations fade.
  *   4. Near-duplicate dedupe
  *                      — drops results whose normalized text is within

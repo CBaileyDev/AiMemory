@@ -1,7 +1,5 @@
 /**
- * Feed filter reducer — Phase 4.
- *
- * The entire feed's filter state lives here. URL-serializable (see
+ * Feed filter reducer. The entire feed's filter state lives here. URL-serializable (see
  * encodeFilterState / decodeFilterState).
  */
 

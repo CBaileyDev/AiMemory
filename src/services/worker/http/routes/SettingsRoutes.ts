@@ -49,10 +49,8 @@ export class SettingsRoutes extends BaseRouteHandler {
     const typed = SettingsDefaultsManager.loadFromFile(settingsPath);
 
     // Also surface any raw keys persisted in the file that are not yet
-    // declared in SettingsDefaults. This lets the Settings UI round-trip
-    // Phase 12 keys (search reranker tuning, per-source `sources` block,
-    // excluded projects) without requiring a schema change in the
-    // shared SettingsDefaultsManager.
+    // declared in SettingsDefaults (search reranker tuning, per-source `sources` block,
+    // excluded projects) without requiring a schema change in SettingsDefaultsManager.
     let extras: Record<string, unknown> = {};
     try {
       if (existsSync(settingsPath)) {
@@ -144,15 +142,15 @@ export class SettingsRoutes extends BaseRouteHandler {
       'CLAUDE_MEM_CONTEXT_SHOW_LAST_SUMMARY',
       'CLAUDE_MEM_CONTEXT_SHOW_LAST_MESSAGE',
       'CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED',
-      // Search reranker (Phase 12 Settings page)
+      // Search reranker
       'CLAUDE_MEM_SEARCH_PROJECT_BOOST',
       'CLAUDE_MEM_SEARCH_USEFUL_BOOST',
       'CLAUDE_MEM_SEARCH_HALFLIFE_DAYS',
       'CLAUDE_MEM_SEARCH_DEDUPE_THRESHOLD',
-      // Semantic context injection (Phase 12 Settings page)
+      // Semantic context injection
       'CLAUDE_MEM_SEMANTIC_INJECT',
       'CLAUDE_MEM_SEMANTIC_INJECT_LIMIT',
-      // Privacy (Phase 12 Settings page)
+      // Privacy
       'CLAUDE_MEM_EXCLUDED_PROJECTS',
       'CLAUDE_MEM_FOLDER_MD_EXCLUDE',
     ];

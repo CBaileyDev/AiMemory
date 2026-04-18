@@ -14,9 +14,8 @@ export function useSettings() {
       .then(res => res.json())
       .then(data => {
         // Preserve EVERY key the server returns (server may include keys
-        // that predate or post-date the typed Settings interface, e.g.
-        // CLAUDE_MEM_SEMANTIC_INJECT / CLAUDE_MEM_SEARCH_* introduced in
-        // Phase 12). ?? (nullish coalescing) keeps falsy values like
+        // that predate or post-date the typed Settings interface).
+        // ?? (nullish coalescing) keeps falsy values like
         // '0', 'false', '' from being silently replaced with defaults.
         const merged: Record<string, string> = {};
         for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {

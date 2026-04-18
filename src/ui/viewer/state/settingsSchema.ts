@@ -1,6 +1,4 @@
 /**
- * Settings schema — Phase 12.
- *
  * Single source of truth for the sectioned Settings page. Declares each
  * settings section, the fields it contains, their input types, validation
  * ranges, default values, and inline hints. Drives both rendering and

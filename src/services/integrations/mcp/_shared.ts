@@ -1,10 +1,9 @@
 /**
  * Shared helpers for JSON-based MCP integrations.
  *
- * Split out of `McpIntegrations.ts` as part of Phase 2 (uniform integration
- * contract). Every MCP IDE that writes a JSON config file now gets its own
- * file under `src/services/integrations/mcp/` using this helper — the
- * symmetry is what makes doctor / backup / uninstall tractable.
+ * Every MCP IDE that writes a JSON config file has its own file under
+ * `src/services/integrations/mcp/` using this helper — the symmetry is what
+ * makes doctor / backup / uninstall tractable.
  *
  * Goose is the one exception — its config is YAML, so it ships in its own
  * file under `mcp/goose.ts` with a separate helper.

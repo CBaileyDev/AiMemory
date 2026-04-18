@@ -2,14 +2,10 @@
  * Integration Types — shared types for IDE integrations.
  *
  * The `Integration` interface is the uniform contract every IDE installer
- * conforms to (Phase 2 of the elevation plan). Each installer publishes
+ * conforms to. Each installer publishes
  * detect / install / uninstall / doctor / backupPaths, and the registry
  * (`registry.ts`) dispatches to the correct integration by id.
  */
-
-// ============================================================================
-// Uniform Integration Contract (Phase 2)
-// ============================================================================
 
 /** Tier 1 = hook/plugin (real-time capture). Tier 2 = MCP-only. Tier 3 = transcript watcher. */
 export type IntegrationTier = 1 | 2 | 3;
