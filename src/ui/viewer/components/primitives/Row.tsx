@@ -11,6 +11,7 @@ interface RowProps extends React.HTMLAttributes<HTMLDivElement> {
   align?: 'stretch' | 'start' | 'center' | 'end' | 'baseline';
   justify?: 'start' | 'center' | 'end' | 'space-between' | 'space-around';
   wrap?: boolean;
+  children?: React.ReactNode;
 }
 
 function gapVar(gap: GapToken): string {

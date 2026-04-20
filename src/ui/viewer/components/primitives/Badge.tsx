@@ -7,6 +7,7 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   subtle?: boolean;
   mono?: boolean;
   caps?: boolean;
+  children?: React.ReactNode;
 }
 
 const TONE_MAP: Record<Tone, { bg: string; fg: string }> = {

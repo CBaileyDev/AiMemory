@@ -32,7 +32,7 @@ export function useSourcesDashboard(enabled: boolean) {
     try {
       const res = await fetch('/api/dashboard/sources');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: SourcesDashboardResponse = await res.json();
+      const json = (await res.json()) as unknown as SourcesDashboardResponse;
       setData(json);
     } catch (e) {
       setError((e as Error).message);

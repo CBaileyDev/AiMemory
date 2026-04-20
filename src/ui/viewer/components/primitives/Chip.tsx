@@ -5,6 +5,7 @@ interface ChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   removable?: boolean;
   onRemove?: () => void;
+  children?: React.ReactNode;
 }
 
 /**

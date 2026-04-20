@@ -4,6 +4,7 @@ import { ObservationCard } from './ObservationCard';
 import { SummaryCard } from './SummaryCard';
 import { PromptCard } from './PromptCard';
 import { ScrollToTop } from './ScrollToTop';
+import { SkeletonCard } from './SkeletonCard';
 import { UI } from '../constants/ui';
 
 interface FeedProps {
@@ -33,8 +34,9 @@ export function Feed({
     const el = loadMoreRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) onLoadMoreRef.current?.();
+      (entries: IntersectionObserverEntry[]) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting && hasMore && !isLoading) onLoadMoreRef.current?.();
       },
       { threshold: UI.LOAD_MORE_THRESHOLD }
     );
@@ -64,6 +66,20 @@ export function Feed({
   }, [observations, summaries, prompts]);
 
   const isTrulyEmpty = items.length === 0 && !isLoading;
+
+  if (items.length === 0 && isLoading) {
+    return (
+      <div className="am-feed">
+        <div className="am-feed__content">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="am-feed__item am-feed__item--intro" style={{ animationDelay: `${i * 40}ms` }}>
+              <SkeletonCard />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="am-feed" ref={feedRef}>

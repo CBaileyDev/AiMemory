@@ -134,7 +134,7 @@ export function SettingsPage(props: SettingsPageProps) {
     const root = scrollerRef.current;
     if (!root) return;
     const observer = new IntersectionObserver(
-      entries => {
+      (entries: IntersectionObserverEntry[]) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
             const id = (entry.target as HTMLElement).dataset.sectionId;
@@ -145,7 +145,7 @@ export function SettingsPage(props: SettingsPageProps) {
       { root, rootMargin: '-40% 0px -55% 0px', threshold: 0 }
     );
     const sections = root.querySelectorAll<HTMLElement>('[data-section-id]');
-    sections.forEach(s => observer.observe(s));
+    sections.forEach((section: HTMLElement) => observer.observe(section));
     return () => observer.disconnect();
   }, []);
 

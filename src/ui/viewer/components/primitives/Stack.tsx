@@ -11,6 +11,7 @@ interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
   gap?: GapToken;
   align?: 'stretch' | 'start' | 'center' | 'end';
   as?: keyof JSX.IntrinsicElements;
+  children?: React.ReactNode;
 }
 
 function gapVar(gap: GapToken): string {

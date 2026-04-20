@@ -60,6 +60,29 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
+function CountUp({ end, duration = 600 }: { end: number, duration?: number }) {
+  const [count, setCount] = React.useState(0);
+
+  React.useEffect(() => {
+    let startTimestamp: number | null = null;
+    let frameId: number;
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      setCount(Math.floor(progress * end));
+      if (progress < 1) {
+        frameId = requestAnimationFrame(step);
+      }
+    };
+
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
+  }, [end, duration]);
+
+  return <>{formatDashboardCount(count)}</>;
+}
+
 export function SourcesDashboard() {
   const { data, loading, error, refresh } = useSourcesDashboard(true);
 
@@ -70,36 +93,6 @@ export function SourcesDashboard() {
     return { active: data.sources, notInstalled };
   }, [data]);
 
-  const stats = useMemo(() => {
-    if (!data) {
-      return [
-        { label: 'Total', value: '—', sub: null },
-        { label: 'This Week', value: '—', sub: null },
-        { label: 'Active', value: '—', sub: null }
-      ];
-    }
-
-    return [
-      {
-        label: 'Total',
-        value: formatDashboardCount(data.totals.total),
-        sub: `${data.totals.totalSources} configured sources`
-      },
-      {
-        label: 'This Week',
-        value: formatDashboardCount(data.totals.thisWeek),
-        sub:
-          data.totals.wowDelta === 0
-            ? 'Flat vs last week'
-            : `${data.totals.wowDelta > 0 ? '▲' : '▼'} ${Math.abs(Math.round(data.totals.wowDelta * 100))}% vs last week`
-      },
-      {
-        label: 'Active',
-        value: `${data.totals.activeSources} / ${data.totals.totalSources}`,
-        sub: `Last event ${formatDashboardRelative(data.totals.lastSeenMs)}`
-      }
-    ];
-  }, [data]);
 
   return (
     <div className="am-dash">
@@ -125,15 +118,33 @@ export function SourcesDashboard() {
       )}
 
       <div className="am-dash__totals">
-        {stats.map((stat) => (
-          <div key={stat.label} className="am-dash__stat">
-            <div className="am-dash__stat-label">{stat.label}</div>
-            <div className="am-dash__stat-value">{stat.value}</div>
-            {stat.sub && (
-              <div className={`am-dash__stat-delta${stat.sub.startsWith('▲') ? ' is-up' : stat.sub.startsWith('▼') ? ' is-down' : ''}`}>
-                {stat.sub}
+        {data && (
+          <>
+            <div className="am-dash__stat">
+              <div className="am-dash__stat-label">Total</div>
+              <div className="am-dash__stat-value"><CountUp end={data.totals.total} /></div>
+              <div className="am-dash__stat-delta">{data.totals.totalSources} configured sources</div>
+            </div>
+            <div className="am-dash__stat">
+              <div className="am-dash__stat-label">This Week</div>
+              <div className="am-dash__stat-value"><CountUp end={data.totals.thisWeek} /></div>
+              <div className={`am-dash__stat-delta ${data.totals.wowDelta > 0 ? 'is-up' : data.totals.wowDelta < 0 ? 'is-down' : ''}`}>
+                {data.totals.wowDelta === 0
+                  ? 'Flat vs last week'
+                  : `${data.totals.wowDelta > 0 ? '▲' : '▼'} ${Math.abs(Math.round(data.totals.wowDelta * 100))}% vs last week`}
               </div>
-            )}
+            </div>
+            <div className="am-dash__stat">
+              <div className="am-dash__stat-label">Active</div>
+              <div className="am-dash__stat-value">{data.totals.activeSources} / {data.totals.totalSources}</div>
+              <div className="am-dash__stat-delta">Last event {formatDashboardRelative(data.totals.lastSeenMs)}</div>
+            </div>
+          </>
+        )}
+        {!data && ['Total', 'This Week', 'Active'].map((label) => (
+          <div key={label} className="am-dash__stat">
+            <div className="am-dash__stat-label">{label}</div>
+            <div className="am-dash__stat-value">—</div>
           </div>
         ))}
       </div>

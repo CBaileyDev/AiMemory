@@ -59,8 +59,16 @@ export class ViewerRoutes extends BaseRouteHandler {
       throw new Error('Viewer UI not found at any expected location');
     }
 
-    const html = readFileSync(viewerPath, 'utf-8');
+    let html = readFileSync(viewerPath, 'utf-8');
+
+    // Inject build timestamp for cache busting of the main bundle
+    const timestamp = Date.now();
+    html = html.replace('viewer-bundle.js', `viewer-bundle.js?v=${timestamp}`);
+
     res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(html);
   });
 
