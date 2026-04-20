@@ -18,21 +18,22 @@ export function FilterSummary({ state, dispatch }: FilterSummaryProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [state, dispatch]);
 
-  if (isEmpty(state)) return null;
+  const hasSecondaryFilters =
+    state.sources.length > 0 ||
+    state.projects.length > 0 ||
+    state.query.length > 0 ||
+    state.since !== null ||
+    state.until !== null;
+
+  if (isEmpty(state) || !hasSecondaryFilters) return null;
 
   return (
     <div className="am-filter-summary" role="region" aria-label="Active filters">
-      <span>filters:</span>
+      <span className="am-filter-summary__label">Active filters</span>
       {state.sources.map(s => (
         <Chip key={`s:${s}`} active removable onClick={() => dispatch({ kind: 'removeSource', value: s })}
               onRemove={() => dispatch({ kind: 'removeSource', value: s })}>
           {s}
-        </Chip>
-      ))}
-      {state.types.map(t => (
-        <Chip key={`t:${t}`} active removable onClick={() => dispatch({ kind: 'removeType', value: t })}
-              onRemove={() => dispatch({ kind: 'removeType', value: t })}>
-          type:{t}
         </Chip>
       ))}
       {state.projects.map(p => (
@@ -48,7 +49,7 @@ export function FilterSummary({ state, dispatch }: FilterSummaryProps) {
           q:{state.query}
         </Chip>
       )}
-      <span style={{ marginLeft: 'auto', opacity: 0.7 }}>press Esc to clear all</span>
+      <span className="am-filter-summary__hint">Esc clears all</span>
     </div>
   );
 }

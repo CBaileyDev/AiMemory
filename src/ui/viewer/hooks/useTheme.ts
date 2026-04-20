@@ -1,76 +1,64 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 
-export type ThemePreference = 'system' | 'light' | 'dark';
-export type ResolvedTheme = 'light' | 'dark';
+/** Neon accent schemes — dark-only viewer; persisted locally. */
+export type NeonScheme = 'cyan' | 'violet' | 'neon-matrix';
 
 const STORAGE_KEY = 'claude-mem-theme';
 
-function getSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined') return 'dark';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+const SCHEMES: NeonScheme[] = ['cyan', 'violet', 'neon-matrix'];
+
+function migrateLegacyStoredValue(raw: string | null): NeonScheme {
+  if (raw === 'cyan' || raw === 'violet' || raw === 'neon-matrix') return raw;
+  // Legacy ThemePreference values → default neon scheme per handoff
+  if (raw === 'dark') return 'cyan';
+  if (raw === 'light' || raw === 'system') return 'cyan';
+  return 'cyan';
 }
 
-function getStoredPreference(): ThemePreference {
+function readScheme(): NeonScheme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'system' || stored === 'light' || stored === 'dark') {
-      return stored;
-    }
+    return migrateLegacyStoredValue(stored);
   } catch (e) {
-    console.warn('Failed to read theme preference from localStorage:', e);
+    console.warn('Failed to read appearance preference from localStorage:', e);
+    return 'cyan';
   }
-  return 'system';
 }
 
-function resolveTheme(preference: ThemePreference): ResolvedTheme {
-  if (preference === 'system') {
-    return getSystemTheme();
-  }
-  return preference;
+/** Apply scheme to the document root (dark-only UI). */
+export function applyNeonScheme(scheme: NeonScheme) {
+  document.documentElement.setAttribute('data-theme', 'dark');
+  document.documentElement.setAttribute('data-neon-scheme', scheme);
 }
 
 export function useTheme() {
-  const [preference, setPreference] = useState<ThemePreference>(getStoredPreference);
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
-    resolveTheme(getStoredPreference())
+  const [scheme, setSchemeState] = useState<NeonScheme>(() =>
+    typeof window === 'undefined' ? 'cyan' : readScheme()
   );
 
-  // Update resolved theme when preference changes
-  useEffect(() => {
-    const newResolvedTheme = resolveTheme(preference);
-    setResolvedTheme(newResolvedTheme);
-    document.documentElement.setAttribute('data-theme', newResolvedTheme);
-  }, [preference]);
+  useLayoutEffect(() => {
+    applyNeonScheme(scheme);
+  }, [scheme]);
 
-  // Listen for system theme changes when preference is 'system'
-  useEffect(() => {
-    if (preference !== 'system') return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      const newTheme = e.matches ? 'dark' : 'light';
-      setResolvedTheme(newTheme);
-      document.documentElement.setAttribute('data-theme', newTheme);
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [preference]);
-
-  const setThemePreference = (newPreference: ThemePreference) => {
+  const setScheme = useCallback((next: NeonScheme) => {
     try {
-      localStorage.setItem(STORAGE_KEY, newPreference);
-      setPreference(newPreference);
+      localStorage.setItem(STORAGE_KEY, next);
+      setSchemeState(next);
     } catch (e) {
-      console.warn('Failed to save theme preference to localStorage:', e);
-      // Still update the theme even if localStorage fails
-      setPreference(newPreference);
+      console.warn('Failed to save appearance preference:', e);
+      setSchemeState(next);
     }
-  };
+  }, []);
+
+  const cycleScheme = useCallback(() => {
+    const i = SCHEMES.indexOf(scheme);
+    const next = SCHEMES[(i + 1) % SCHEMES.length];
+    setScheme(next);
+  }, [scheme, setScheme]);
 
   return {
-    preference,
-    resolvedTheme,
-    setThemePreference
+    scheme,
+    setScheme,
+    cycleScheme
   };
 }

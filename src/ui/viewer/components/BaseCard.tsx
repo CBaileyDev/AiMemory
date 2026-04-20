@@ -23,6 +23,39 @@ export interface BaseCardProps {
   accent?: 'neutral' | 'summary' | 'prompt';
 }
 
+function normalizeCardType(type?: string): string | undefined {
+  if (!type) return undefined;
+  const normalized = type.trim().toLowerCase().replace(/_/g, '-');
+
+  switch (normalized) {
+    case 'learned':
+    case 'decision':
+      return 'learned';
+    case 'completed':
+    case 'feature':
+      return 'completed';
+    case 'investigated':
+    case 'refactor':
+      return 'investigated';
+    case 'next-steps':
+    case 'discovery':
+      return 'next-steps';
+    case 'bug':
+    case 'bugfix':
+      return 'bugfix';
+    case 'summary':
+    case 'prompt':
+      return normalized;
+    default:
+      return normalized;
+  }
+}
+
+function formatCardType(type?: string): string | undefined {
+  if (!type) return undefined;
+  return type.trim().replace(/_/g, '-');
+}
+
 /**
  * Shared card shell consumed by ObservationCard, SummaryCard, PromptCard.
  * Owns: source dot, id chip (copyable), project, type, timestamp, footer.
@@ -51,6 +84,9 @@ export function BaseCard({
   const dateIso = new Date(createdAtEpoch).toISOString();
   const citeKey = `${idPrefix}#${id}`;
   const copiedRef = useRef<HTMLSpanElement>(null);
+  const normalizedType = normalizeCardType(type);
+  const normalizedSource = (source ?? 'unknown').trim().toLowerCase();
+  const displayType = formatCardType(type);
 
   const copyCite = useCallback(() => {
     try {
@@ -85,36 +121,37 @@ export function BaseCard({
       aria-label={ariaLabel ?? `${citeKey} in ${project}`}
       tabIndex={0}
       data-id={String(id)}
+      data-type={normalizedType}
+      data-source={normalizedSource}
       onKeyDown={onKeyDown}
     >
-      <Row justify="space-between" align="center" style={{ width: '100%', gap: 'var(--space-3)' }}>
-        <Row gap="2" align="center" wrap style={{ minWidth: 0, flex: 1 }}>
-          <SourceDot source={source} size={8} title={source ?? undefined} />
-          <span className="am-card__source">{source || 'unknown'}</span>
-          <span className="am-card__sep">/</span>
-          <span className="am-card__project" title={project}>{project}</span>
-          {type && (
-            <>
-              <span className="am-card__sep">/</span>
-              {typeBadge ?? <span className="am-card__type">{type}</span>}
-            </>
-          )}
-          <span className="am-card__sep">•</span>
-          <time className="am-card__time" dateTime={dateIso} title={dateIso}>{date}</time>
+      <div className="am-card__head">
+        <Row justify="space-between" align="start" wrap className="am-card__meta" style={{ width: '100%', gap: 'var(--space-3)' }}>
+          <Row gap="2" align="center" wrap className="am-card__meta-main" style={{ minWidth: 0, flex: 1 }}>
+            {type && (typeBadge ?? <span className="am-card__type">{displayType}</span>)}
+            <span className="am-card__sourceline">
+              <SourceDot source={source} size={6} title={source ?? undefined} />
+              <span className="am-card__source">{source || 'unknown'}</span>
+            </span>
+          </Row>
+          <Row gap="2" align="center" wrap className="am-card__actions">
+            <time className="am-card__time" dateTime={dateIso} title={dateIso}>{date}</time>
+            <button
+              type="button"
+              className="am-card__id"
+              onClick={copyCite}
+              title={`Copy ${citeKey}`}
+              aria-label={`Copy cite key ${citeKey}`}
+            >
+              <span ref={copiedRef} className="am-card__id-text">{citeKey}</span>
+            </button>
+          </Row>
         </Row>
-        <button
-          type="button"
-          className="am-card__id"
-          onClick={copyCite}
-          title={`Copy ${citeKey}`}
-          aria-label={`Copy cite key ${citeKey}`}
-        >
-          <span ref={copiedRef} className="am-card__id-text">{citeKey}</span>
-        </button>
-      </Row>
+      </div>
 
       {title && <h3 className="am-card__title">{title}</h3>}
       {subtitle && <p className="am-card__subtitle">{subtitle}</p>}
+      <p className="am-card__projectline" title={project}>{project}</p>
 
       {children && <div className="am-card__body">{children}</div>}
 

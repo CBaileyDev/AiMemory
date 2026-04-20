@@ -88,18 +88,18 @@ const DEDUPE_RANGE: NumberFieldConstraints = { min: 0.5, max: 0.99, step: 0.01 }
 export const SECTION_GENERAL: SettingsSectionDef = {
   id: 'general',
   title: 'General',
-  description: 'Theme, worker network, and logging.',
+  description: 'Appearance, worker network, and logging.',
   fields: [
     {
       id: 'general-theme',
       key: '__theme',
-      label: 'Theme',
-      hint: 'System follows your OS preference. Saves instantly and does not affect the settings file.',
+      label: 'Color scheme',
+      hint: 'Dark-only viewer accent. Saves instantly and does not affect the settings file.',
       kind: 'select',
       options: [
-        { value: 'system', label: 'System' },
-        { value: 'light', label: 'Light' },
-        { value: 'dark', label: 'Dark' }
+        { value: 'cyan', label: 'Cyan Pulse' },
+        { value: 'violet', label: 'Violet Storm' },
+        { value: 'neon-matrix', label: 'Neon Matrix' }
       ]
     },
     {

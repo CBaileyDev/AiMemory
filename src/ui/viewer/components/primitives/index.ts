@@ -9,3 +9,4 @@ export { KeyboardShortcut } from './KeyboardShortcut';
 export { SourceDot } from './SourceDot';
 export { IconButton } from './IconButton';
 export { Tooltip } from './Tooltip';
+export { SchemePicker, NEON_SCHEME_OPTIONS } from './SchemePicker';

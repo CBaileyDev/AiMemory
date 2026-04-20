@@ -4,32 +4,36 @@ interface ScrollToTopProps {
   targetRef: React.RefObject<HTMLDivElement>;
 }
 
+function findScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = node;
+  while (el && el !== document.body) {
+    const style = window.getComputedStyle(el);
+    if (/(auto|scroll|overlay)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return document.scrollingElement as HTMLElement | null;
+}
+
 export function ScrollToTop({ targetRef }: ScrollToTopProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const scroller = findScrollParent(targetRef.current);
+    if (!scroller) return;
+
     const handleScroll = () => {
-      const target = targetRef.current;
-      if (target) {
-        setIsVisible(target.scrollTop > 300);
-      }
+      setIsVisible(scroller.scrollTop > 300);
     };
 
-    const target = targetRef.current;
-    if (target) {
-      target.addEventListener('scroll', handleScroll);
-      return () => target.removeEventListener('scroll', handleScroll);
-    }
+    scroller.addEventListener('scroll', handleScroll);
+    return () => scroller.removeEventListener('scroll', handleScroll);
   }, []); // Empty deps - only set up listener once on mount
 
   const scrollToTop = () => {
-    const target = targetRef.current;
-    if (target) {
-      target.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
+    const scroller = findScrollParent(targetRef.current);
+    scroller?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (!isVisible) return null;

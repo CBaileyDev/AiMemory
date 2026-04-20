@@ -48,8 +48,9 @@ export function Feed({
     const node = cardRefs.current.get(highlightedId);
     if (!node) return;
     node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    node.classList.add('am-card--fresh');
-    const timer = window.setTimeout(() => node.classList.remove('am-card--fresh'), 1200);
+    const target = (node.querySelector('.am-card') as HTMLElement | null) ?? node;
+    target.classList.add('am-card--fresh');
+    const timer = window.setTimeout(() => target.classList.remove('am-card--fresh'), 1200);
     return () => window.clearTimeout(timer);
   }, [highlightedId]);
 
@@ -71,7 +72,7 @@ export function Feed({
         <EmptyState sourcesDetected={sourcesDetected} />
       ) : (
         <div className="am-feed__content">
-          {items.map((item) => {
+          {items.map((item, index) => {
             const cardKey = `${item.itemType}-${item.id}`;
             const registerRef = (node: HTMLElement | null) => {
               if (item.itemType === 'observation') {
@@ -84,15 +85,36 @@ export function Feed({
             };
             if (item.itemType === 'observation') {
               return (
-                <div key={cardKey} ref={registerRef as (el: HTMLDivElement | null) => void}>
+                <div
+                  key={cardKey}
+                  ref={registerRef as (el: HTMLDivElement | null) => void}
+                  className={`am-feed__item${index < 12 ? ' am-feed__item--intro' : ''}`}
+                  style={index < 12 ? { animationDelay: `${index * 30}ms` } : undefined}
+                >
                   <ObservationCard observation={item} {...cardProps} />
                 </div>
               );
             }
             if (item.itemType === 'summary') {
-              return <SummaryCard key={cardKey} summary={item} />;
+              return (
+                <div
+                  key={cardKey}
+                  className={`am-feed__item${index < 12 ? ' am-feed__item--intro' : ''}`}
+                  style={index < 12 ? { animationDelay: `${index * 30}ms` } : undefined}
+                >
+                  <SummaryCard summary={item} />
+                </div>
+              );
             }
-            return <PromptCard key={cardKey} prompt={item} />;
+            return (
+              <div
+                key={cardKey}
+                className={`am-feed__item${index < 12 ? ' am-feed__item--intro' : ''}`}
+                style={index < 12 ? { animationDelay: `${index * 30}ms` } : undefined}
+              >
+                <PromptCard prompt={item} />
+              </div>
+            );
           })}
           {isLoading && (
             <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-muted)' }}>

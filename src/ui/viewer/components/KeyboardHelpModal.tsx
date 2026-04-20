@@ -17,6 +17,7 @@ const SECTIONS: Section[] = [
       { keys: ['⌘', 'J'], label: 'Ask panel' },
       { keys: ['?'], label: 'Show this help' },
       { keys: ['g', 'h'], label: 'Go to feed' },
+      { keys: ['g', 'v'], label: 'Go to graph' },
       { keys: ['g', 's'], label: 'Go to sources' },
       { keys: ['g', 'c'], label: 'Go to settings' },
       { keys: ['Esc'], label: 'Close / clear filters' }

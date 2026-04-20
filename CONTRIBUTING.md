@@ -92,4 +92,4 @@ npm run prepublishOnly  # build + check:dist
 
 ## Roadmap
 
-See [`CLEANUP_PLAN.md`](CLEANUP_PLAN.md) for the current phased cleanup and improvement roadmap.
+Track priorities via [GitHub issues](https://github.com/thedotmack/claude-mem/issues) and project discussions.

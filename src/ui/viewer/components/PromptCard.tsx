@@ -16,7 +16,7 @@ function PromptCardImpl({ prompt, pulseOnMount }: PromptCardProps) {
       source={prompt.platform_source}
       project={prompt.project}
       type="prompt"
-      typeBadge={<Badge tone="info">prompt</Badge>}
+      typeBadge={<Badge tone="info" caps>prompt</Badge>}
       createdAtEpoch={prompt.created_at_epoch}
       accent="prompt"
       pulseOnMount={pulseOnMount}

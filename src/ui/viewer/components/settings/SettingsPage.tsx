@@ -1,14 +1,14 @@
 /**
- * SettingsPage — Phase 12.
+ * SettingsPage — sectioned settings UI.
  *
- * Sectioned replacement for ContextSettingsModal. Left nav + scrollable
+ * Left nav + scrollable
  * right pane. All writes go through useSettings, same hook the legacy
  * modal used. Dirty-state is tracked locally and gates navigation.
  */
 
 import React from 'react';
 import type { Settings } from '../../types';
-import type { ThemePreference } from '../../hooks/useTheme';
+import type { NeonScheme } from '../../hooks/useTheme';
 import { SETTINGS_SECTIONS, sectionFields, validateAll } from '../../state/settingsSchema';
 import type { ValidationIssue, SettingsSectionDef } from '../../state/settingsSchema';
 import { SectionGeneral } from './SectionGeneral';
@@ -32,9 +32,11 @@ interface SettingsPageProps {
   onSave: (next: Settings) => void;
   isSaving: boolean;
   saveStatus: string;
-  /** Theme preference (General section). */
-  theme: ThemePreference;
-  onThemeChange: (t: ThemePreference) => void;
+  /** Appearance / color scheme (General section — not persisted in settings file). */
+  scheme: NeonScheme;
+  onSchemeChange: (t: NeonScheme) => void;
+  /** Full-page route vs modal overlay. */
+  variant?: 'modal' | 'page';
   /** Catalog of source ids detected in the live SSE stream. */
   detectedSources: string[];
   /** Invoked when the user explicitly closes the settings surface. */
@@ -44,7 +46,7 @@ interface SettingsPageProps {
 type SourcesBlock = Record<string, Record<string, unknown>>;
 type FormState = Record<string, string> & { __theme: string; __sources: SourcesBlock };
 
-function toFormState(settings: Settings, theme: string, sources: SourcesBlock): FormState {
+function toFormState(settings: Settings, schemeUi: string, sources: SourcesBlock): FormState {
   const base: Record<string, string> = {};
   for (const [k, v] of Object.entries(settings)) {
     if (v === undefined || v === null) continue;
@@ -64,7 +66,7 @@ function toFormState(settings: Settings, theme: string, sources: SourcesBlock): 
     }
   }
 
-  return { ...base, __theme: theme, __sources: sources } as FormState;
+  return { ...base, __theme: schemeUi, __sources: sources } as FormState;
 }
 
 function extractSourcesBlockFromSettings(raw: Record<string, unknown>): SourcesBlock {
@@ -76,7 +78,7 @@ function extractSourcesBlockFromSettings(raw: Record<string, unknown>): SourcesB
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  const { settings, onSave, isSaving, saveStatus, theme, onThemeChange, detectedSources, onClose } = props;
+  const { settings, onSave, isSaving, saveStatus, scheme, onSchemeChange, detectedSources, onClose, variant = 'modal' } = props;
 
   // Fetch the raw settings file once to pick up the `sources` block that
   // isn't included in the Settings TS type. Posts back the merged object
@@ -96,8 +98,8 @@ export function SettingsPage(props: SettingsPageProps) {
   const sourcesBaseline = React.useMemo(() => extractSourcesBlockFromSettings(rawSettings), [rawSettings]);
 
   const baseline = React.useMemo<FormState>(
-    () => toFormState(settings, theme, sourcesBaseline),
-    [settings, theme, sourcesBaseline]
+    () => toFormState(settings, scheme, sourcesBaseline),
+    [settings, scheme, sourcesBaseline]
   );
   const [formState, setFormState] = React.useState<FormState>(baseline);
 
@@ -173,9 +175,9 @@ export function SettingsPage(props: SettingsPageProps) {
   const handleSave = () => {
     if (hasErrors) return;
 
-    // Persist theme locally (not in the settings file).
-    if (formState.__theme && formState.__theme !== theme) {
-      onThemeChange(formState.__theme as ThemePreference);
+    // Persist appearance locally (not in the settings file).
+    if (formState.__theme && formState.__theme !== scheme) {
+      onSchemeChange(formState.__theme as NeonScheme);
     }
 
     const nextSettings: Record<string, string> = { ...(settings as unknown as Record<string, string>) };
@@ -204,32 +206,44 @@ export function SettingsPage(props: SettingsPageProps) {
     reset(baseline);
   };
 
+  const isPage = variant === 'page';
+
   return (
     <div
-      className="am-settings-page"
-      role="dialog"
-      aria-modal="true"
+      className={`am-settings-page${isPage ? ' am-settings-page--page' : ''}`}
+      role={isPage ? undefined : 'dialog'}
+      aria-modal={isPage ? undefined : true}
       aria-labelledby="am-settings-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-bg-backdrop)',
-        zIndex: 50,
-        display: 'flex',
-        flexDirection: 'column'
-      }}
+      style={
+        isPage
+          ? {
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--color-bg-primary)'
+            }
+          : {
+              position: 'fixed',
+              inset: 0,
+              background: 'var(--color-bg-backdrop)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column'
+            }
+      }
     >
       <div
         style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          margin: 'var(--space-5) auto',
-          width: 'min(1100px, 96vw)',
-          maxHeight: '92vh',
+          margin: isPage ? 0 : 'var(--space-5) auto',
+          width: isPage ? '100%' : 'min(1100px, 96vw)',
+          maxHeight: isPage ? 'none' : '92vh',
           background: 'var(--color-bg-primary)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--elev-3)',
+          borderRadius: isPage ? 0 : 'var(--radius-lg)',
+          boxShadow: isPage ? 'none' : 'var(--elev-3)',
           overflow: 'hidden'
         }}
       >

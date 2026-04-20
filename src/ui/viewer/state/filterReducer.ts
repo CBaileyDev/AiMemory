@@ -100,7 +100,7 @@ export function matchesFilter(item: {
   const src = item.platform_source || 'claude';
   if (state.sources.length && !state.sources.includes(src)) return false;
   if (state.projects.length && !state.projects.includes(item.project || '')) return false;
-  if (state.types.length && item.type && !state.types.includes(item.type)) return false;
+  if (state.types.length && !state.types.includes(item.type || '')) return false;
   if (state.since !== null && item.created_at_epoch < state.since) return false;
   if (state.until !== null && item.created_at_epoch > state.until) return false;
   if (state.query) {

@@ -188,5 +188,4 @@ is the authoritative release path.
 ## Where to ask for help
 
 - Open an issue at https://github.com/thedotmack/claude-mem/issues.
-- For design questions on a phase still in the plan file, comment
-  on the plan doc (`.plan/`) rather than opening a code PR.
+- For design questions, open a discussion or issue so maintainers can align before large PRs.

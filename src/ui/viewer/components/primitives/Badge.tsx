@@ -6,6 +6,7 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: Tone;
   subtle?: boolean;
   mono?: boolean;
+  caps?: boolean;
 }
 
 const TONE_MAP: Record<Tone, { bg: string; fg: string }> = {
@@ -25,6 +26,7 @@ export function Badge({
   tone = 'neutral',
   subtle = true,
   mono = false,
+  caps = false,
   style,
   children,
   ...rest
@@ -37,15 +39,16 @@ export function Badge({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 'var(--space-1)',
-        padding: '0.125rem 0.5rem',
-        borderRadius: 'var(--radius-pill)',
+        padding: caps ? '0.125rem 0.5rem' : '0.1875rem 0.5rem',
+        borderRadius: 'var(--radius-sm)',
         background: subtle ? bg : fg,
         color: subtle ? fg : 'var(--color-text-inverse)',
-        fontSize: 'var(--text-xs)',
+        fontSize: caps ? '0.625rem' : '0.6875rem',
         fontWeight: 600,
-        letterSpacing: '0.01em',
+        letterSpacing: caps ? '0.08em' : '0.025em',
         fontFamily: mono ? 'var(--font-mono)' : 'inherit',
-        lineHeight: 1.4,
+        lineHeight: 1.2,
+        textTransform: caps ? 'uppercase' : 'none',
         whiteSpace: 'nowrap',
         ...style
       }}

@@ -36,6 +36,7 @@ function stripProjectRoot(filePath: string): string {
  */
 function ObservationCardImpl({ observation, pulseOnMount }: ObservationCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const normalizedType = observation.type?.trim().toLowerCase().replace(/_/g, '-');
 
   const { facts, concepts, filesRead, filesModified, hasDetails } = useMemo(() => {
     const f = parseJsonArray(observation.facts);
@@ -49,11 +50,11 @@ function ObservationCardImpl({ observation, pulseOnMount }: ObservationCardProps
   }, [observation.facts, observation.concepts, observation.files_read, observation.files_modified]);
 
   const toneForType =
-    observation.type === 'bugfix' || observation.type === 'bug' ? 'error' :
-    observation.type === 'decision' ? 'accent' :
-    observation.type === 'feature' ? 'success' :
-    observation.type === 'refactor' ? 'info' :
-    observation.type === 'discovery' ? 'warning' :
+    normalizedType === 'bugfix' || normalizedType === 'bug' ? 'error' :
+    normalizedType === 'decision' || normalizedType === 'learned' ? 'accent' :
+    normalizedType === 'feature' || normalizedType === 'completed' ? 'success' :
+    normalizedType === 'refactor' || normalizedType === 'investigated' ? 'info' :
+    normalizedType === 'discovery' || normalizedType === 'next-steps' ? 'warning' :
     'neutral';
 
   return (
@@ -63,7 +64,7 @@ function ObservationCardImpl({ observation, pulseOnMount }: ObservationCardProps
       source={observation.platform_source}
       project={observation.project}
       type={observation.type || undefined}
-      typeBadge={<Badge tone={toneForType}>{observation.type}</Badge>}
+      typeBadge={<Badge tone={toneForType} caps>{observation.type?.replace(/_/g, '-')}</Badge>}
       createdAtEpoch={observation.created_at_epoch}
       title={observation.title || 'Untitled'}
       subtitle={!expanded ? observation.subtitle || undefined : undefined}

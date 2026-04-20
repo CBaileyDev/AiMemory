@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'feed' | 'sources' | 'settings';
+export type Route = 'feed' | 'graph' | 'sources' | 'settings';
 
 function parseRoute(hash: string): Route {
   const h = hash.replace(/^#/, '').split('?')[0];
+  if (h === 'graph') return 'graph';
   if (h === 'sources') return 'sources';
   if (h === 'settings') return 'settings';
   return 'feed';

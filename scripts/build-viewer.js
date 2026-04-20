@@ -34,7 +34,7 @@ async function buildViewer() {
 
     // Copy HTML template to build output, inlining tokens.css so the token
     // system is the last definition loaded and wins the cascade. See
-    // .plan/viewer-ui-direction.md section 1 for rationale.
+    // Tokens are the cascade winner for viewer styling (see src/ui/tokens.css).
     const htmlTemplate = fs.readFileSync(
       path.join(rootDir, 'src/ui/viewer-template.html'),
       'utf-8'

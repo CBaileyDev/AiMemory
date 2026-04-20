@@ -29,7 +29,7 @@ function SummaryCardImpl({ summary, pulseOnMount }: SummaryCardProps) {
       source={summary.platform_source}
       project={summary.project}
       type="summary"
-      typeBadge={<Badge tone="warning">session</Badge>}
+      typeBadge={<Badge tone="warning" caps>session</Badge>}
       createdAtEpoch={summary.created_at_epoch}
       title={summary.request || 'Session Summary'}
       accent="summary"
