@@ -6697,6 +6697,127 @@ button { font-family: inherit; color: inherit; }
     var(--bg-0);
 }
 
+/* ============================================================
+ * Phase 13 — Tauri native chrome
+ * Frameless window controls, traffic-light spacer, vibrancy, drag
+ * regions. Activated by [data-tauri="true"] on <html> (set by
+ * useTauri()). All rules no-op in the browser viewer.
+ * ============================================================ */
+
+:root {
+  --titlebar-h: 36px;
+  --traffic-light-w: 78px;
+  --winctl-w: 138px;
+  --winctl-h: 32px;
+  --winctl-radius: 6px;
+}
+
+/* When running inside Tauri, let the OS vibrancy show through the body
+   so the rail and cards float on a real frosted surface. The app's own
+   gradient still paints on the .app element. */
+html[data-tauri='true'],
+html[data-tauri='true'] body {
+  background: transparent;
+}
+html[data-tauri='true'] body {
+  /* Round the inner corners on macOS to match the native window radius. */
+  border-radius: 12px;
+  overflow: hidden;
+}
+html[data-tauri='true'] .app {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(34, 211, 238, 0.06), transparent 60%),
+    radial-gradient(900px 700px at -10% 110%, rgba(167, 139, 250, 0.05), transparent 65%),
+    rgba(7, 9, 12, 0.55);
+  backdrop-filter: saturate(140%);
+}
+/* Rail picks up a touch more transparency to expose the vibrancy. */
+html[data-tauri='true'] .rail {
+  background: rgba(11, 15, 20, 0.55);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+}
+
+/* Drag-region affordance: the OS already handles the pointer, but add
+   a subtle "grabbable" cursor when hovering over titlebar dead-space.
+   Buttons/inputs inside still receive normal pointer events because
+   Tauri excludes interactive elements from drag. */
+html[data-tauri='true'] [data-tauri-drag-region] {
+  cursor: default;
+}
+
+/* macOS traffic lights: Tauri renders them natively at (18, 20). The
+   spacer reserves room in the rail brand so they don't overlap our
+   logomark. */
+.traffic-light-spacer {
+  display: inline-block;
+  width: var(--traffic-light-w);
+  height: 1px;
+  flex: 0 0 auto;
+}
+html:not([data-platform='mac']) .traffic-light-spacer { display: none; }
+
+/* Window controls cluster (Windows / Linux only — macOS uses native). */
+.winctl {
+  margin-left: var(--sp-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--winctl-h);
+  padding-left: var(--sp-2);
+  border-left: 1px solid var(--line-2);
+}
+.winctl-btn {
+  width: 44px;
+  height: var(--winctl-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--winctl-radius);
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.winctl-btn:hover {
+  background: var(--bg-3);
+  color: var(--ink-0);
+}
+.winctl-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+.winctl-btn--close:hover {
+  background: var(--err);
+  color: #0b0f14;
+}
+/* Hide the cluster when not in Tauri or on macOS. */
+html:not([data-tauri='true']) .winctl,
+html[data-platform='mac'] .winctl { display: none; }
+
+/* Buttons / inputs are auto-excluded from drag by Tauri, but make doubly
+   sure interactive children inside drag regions are clickable. */
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] select,
+[data-tauri-drag-region] textarea,
+[data-tauri-drag-region] a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Subtle window-loaded fade-in so the frameless app doesn't pop. */
+@keyframes claudeMemFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}
+html[data-tauri='true'] .app {
+  animation: claudeMemFadeIn 220ms var(--ease-out) both;
+}
+
 </style>
 </head>
 <body>

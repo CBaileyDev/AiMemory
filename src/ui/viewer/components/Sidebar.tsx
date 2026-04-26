@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Route } from '../hooks/useRoute';
+import { TrafficLightSpacer } from './WindowControls';
 
 interface SidebarProps {
   route: Route;
@@ -110,10 +111,11 @@ export function Sidebar({
 
   return (
     <aside className="rail" aria-label="Workspace navigation">
-      <div className="rail-brand">
+      <div className="rail-brand" data-tauri-drag-region>
+        <TrafficLightSpacer />
         <div className="rail-mark" aria-hidden="true" />
-        <div className="rail-name"><b>Ai</b><span>Memory</span></div>
-        <span className="rail-build">v{appVersion}</span>
+        <div className="rail-name" data-tauri-drag-region><b>Ai</b><span>Memory</span></div>
+        <span className="rail-build" data-tauri-drag-region>v{appVersion}</span>
       </div>
 
       <div className="rail-section">
