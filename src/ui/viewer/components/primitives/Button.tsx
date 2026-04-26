@@ -6,6 +6,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: 'sm' | 'md';
   icon?: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const VARIANT: Record<Variant, React.CSSProperties> = {

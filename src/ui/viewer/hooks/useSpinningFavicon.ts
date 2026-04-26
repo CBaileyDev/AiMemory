@@ -12,17 +12,21 @@ export function useSpinningFavicon(isProcessing: boolean) {
   const originalFaviconRef = useRef<string | null>(null);
 
   useEffect(() => {
+    let disposed = false;
+
     // Create canvas once
     if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas');
-      canvasRef.current.width = 32;
-      canvasRef.current.height = 32;
+      const canvas = document.createElement('canvas');
+      canvas.width = 32;
+      canvas.height = 32;
+      canvasRef.current = canvas;
     }
 
     // Load image once
     if (!imageRef.current) {
-      imageRef.current = new Image();
-      imageRef.current.src = 'claude-mem-logomark.webp';
+      const image = new Image();
+      image.src = 'claude-mem-logomark.webp';
+      imageRef.current = image;
     }
 
     // Store original favicon
@@ -34,10 +38,8 @@ export function useSpinningFavicon(isProcessing: boolean) {
     }
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
     const image = imageRef.current;
-
-    if (!ctx) return;
+    if (!canvas || !image) return;
 
     const updateFavicon = (dataUrl: string) => {
       let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -50,6 +52,15 @@ export function useSpinningFavicon(isProcessing: boolean) {
     };
 
     const animate = () => {
+      if (disposed || !canvasRef.current) return;
+
+      const canvas = canvasRef.current;
+      const image = imageRef.current;
+      if (!canvas || !image) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
       if (!image.complete) {
         animationRef.current = requestAnimationFrame(animate);
         return;
@@ -84,6 +95,7 @@ export function useSpinningFavicon(isProcessing: boolean) {
     }
 
     return () => {
+      disposed = true;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;

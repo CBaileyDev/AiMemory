@@ -186,9 +186,9 @@ export function App() {
         pagination.summaries.loadMore(),
         pagination.prompts.loadMore()
       ]);
-      if (newObs.length) setPaginatedObservations(prev => [...prev, ...newObs]);
-      if (newSum.length) setPaginatedSummaries(prev => [...prev, ...newSum]);
-      if (newP.length) setPaginatedPrompts(prev => [...prev, ...newP]);
+      if (newObs.length) setPaginatedObservations(prev => [...prev, ...(newObs as Observation[])]);
+      if (newSum.length) setPaginatedSummaries(prev => [...prev, ...(newSum as Summary[])]);
+      if (newP.length) setPaginatedPrompts(prev => [...prev, ...(newP as UserPrompt[])]);
     } catch (e) {
       console.error('[App] loadMore failed:', e);
     }

@@ -30,7 +30,7 @@ function toRgba(rgb: string, alpha: number): string {
   return rgb;
 }
 
-const RADAR_RADII = [150, 280, 410, 540];
+const RADAR_RADII = [140, 270, 400, 520];
 const COMET_EDGE_LIMIT = 300;
 
 function materializeGraph(
@@ -102,6 +102,9 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // Explicit types preserve narrowing inside closures (TypeScript loses narrowing across function boundaries)
+    const canvasEl: HTMLCanvasElement = canvas;
+    const context: CanvasRenderingContext2D = ctx;
     const state = stateRef.current;
 
     function rebuild(lod: 0 | 1 | 2) {
@@ -115,17 +118,17 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.parentElement?.getBoundingClientRect();
+      const rect = canvasEl.parentElement?.getBoundingClientRect();
       if (!rect) return;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvasEl.width = rect.width * dpr;
+      canvasEl.height = rect.height * dpr;
+      canvasEl.style.width = `${rect.width}px`;
+      canvasEl.style.height = `${rect.height}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     function toWorld(sx: number, sy: number) {
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       const cam = state.camera;
       return {
         x: (sx - rect.width / 2) / cam.zoom - cam.x,
@@ -140,31 +143,31 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
         return;
       }
 
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       const { width, height } = rect;
       const cam = state.camera;
 
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.translate(width / 2, height / 2);
-      ctx.scale(cam.zoom, cam.zoom);
-      ctx.translate(cam.x, cam.y);
+      context.clearRect(0, 0, width, height);
+      context.save();
+      context.translate(width / 2, height / 2);
+      context.scale(cam.zoom, cam.zoom);
+      context.translate(cam.x, cam.y);
 
       const radarRadii = RADAR_RADII;
-      ctx.strokeStyle = 'rgba(255,255,255,0.014)';
-      ctx.lineWidth = 0.5 / cam.zoom;
+      context.strokeStyle = 'rgba(255,255,255,0.014)';
+      context.lineWidth = 0.5 / cam.zoom;
       for (const radius of radarRadii) {
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.stroke();
+        context.beginPath();
+        context.arc(0, 0, radius, 0, Math.PI * 2);
+        context.stroke();
       }
 
       const scanAngle = (time * 0.0004) % (Math.PI * 2);
-      ctx.beginPath();
-      ctx.arc(0, 0, radarRadii[radarRadii.length - 1], scanAngle, scanAngle + 0.02);
-      ctx.strokeStyle = toRgba(state.accent, 0.18);
-      ctx.lineWidth = 1.1 / cam.zoom;
-      ctx.stroke();
+      context.beginPath();
+      context.arc(0, 0, radarRadii[radarRadii.length - 1], scanAngle, scanAngle + 0.02);
+      context.strokeStyle = toRgba(state.accent, 0.18);
+      context.lineWidth = 1.1 / cam.zoom;
+      context.stroke();
 
       for (const edge of state.edges) {
         const a = state.nodes[edge.from];
@@ -175,12 +178,12 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
           state.mouse.hoveredNode !== null &&
           (edge.from === state.mouse.hoveredNode || edge.to === state.mouse.hoveredNode);
 
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = isHovered ? toRgba(a.color, 0.35) : toRgba(state.accent, 0.08);
-        ctx.lineWidth = isHovered ? 1.1 / cam.zoom : 0.55 / cam.zoom;
-        ctx.stroke();
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.strokeStyle = isHovered ? toRgba(a.color, 0.35) : toRgba(state.accent, 0.08);
+        context.lineWidth = isHovered ? 1.1 / cam.zoom : 0.55 / cam.zoom;
+        context.stroke();
       }
 
       if (state.lod < 2) {
@@ -206,10 +209,10 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
             const py = a.y + (b.y - a.y) * t;
             const radius = Math.max(0.35 / cam.zoom, (2.2 - segment * 0.3) / cam.zoom);
 
-            ctx.beginPath();
-            ctx.arc(px, py, radius, 0, Math.PI * 2);
-            ctx.fillStyle = toRgba(a.color, Math.max(0.08, 0.95 - segment * 0.16));
-            ctx.fill();
+            context.beginPath();
+            context.arc(px, py, radius, 0, Math.PI * 2);
+            context.fillStyle = toRgba(a.color, Math.max(0.08, 0.95 - segment * 0.16));
+            context.fill();
           }
         }
       }
@@ -223,11 +226,11 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
 
           const burstAlpha = 1 - burstPhase / 0.3;
           const burstRadius = node.radius * 2 + burstPhase * 40;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, burstRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = toRgba(node.color, burstAlpha * 0.3);
-          ctx.lineWidth = 1 / cam.zoom;
-          ctx.stroke();
+          context.beginPath();
+          context.arc(node.x, node.y, burstRadius, 0, Math.PI * 2);
+          context.strokeStyle = toRgba(node.color, burstAlpha * 0.3);
+          context.lineWidth = 1 / cam.zoom;
+          context.stroke();
         }
       }
 
@@ -254,19 +257,25 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
         }
 
         if (isHovered || (node.isHub && state.lod < 2)) {
-          const glow = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius * 4);
+          context.shadowBlur = radius * 2;
+          context.shadowColor = toRgba(node.color, alpha * 0.5);
+          
+          const glow = context.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius * 4);
           glow.addColorStop(0, toRgba(node.color, alpha * 0.22));
           glow.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, radius * 4, 0, Math.PI * 2);
-          ctx.fillStyle = glow;
-          ctx.fill();
+          context.beginPath();
+          context.arc(node.x, node.y, radius * 4, 0, Math.PI * 2);
+          context.fillStyle = glow;
+          context.fill();
         }
 
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = toRgba(node.color, alpha);
-        ctx.fill();
+        context.beginPath();
+        context.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        context.fillStyle = toRgba(node.color, alpha);
+        context.fill();
+        
+        // Reset shadow for subsequent draws
+        context.shadowBlur = 0;
       }
 
       if (state.mouse.hoveredNode !== null) {
@@ -283,31 +292,31 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
           const bubbleHeight = 22 / cam.zoom;
           const bubbleRadius = 6 / cam.zoom;
 
-          ctx.font = `500 ${fontSize}px ui-sans-serif, system-ui`;
-          ctx.textBaseline = 'middle';
-          const metrics = ctx.measureText(label);
+          context.font = `500 ${fontSize}px ui-sans-serif, system-ui`;
+          context.textBaseline = 'middle';
+          const metrics = context.measureText(label);
           const bubbleWidth = metrics.width + bubblePadX * 2;
           const bubbleX = node.x - bubbleWidth / 2;
           const bubbleY = node.y - node.radius - bubbleYOffset - bubbleHeight / 2;
 
-          ctx.fillStyle = 'rgba(10,10,14,0.92)';
-          drawTooltipBubble(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius);
-          ctx.fill();
-          ctx.strokeStyle = toRgba(node.color, 0.35);
-          ctx.lineWidth = 1 / cam.zoom;
-          ctx.stroke();
+          context.fillStyle = 'rgba(10,10,14,0.92)';
+          drawTooltipBubble(context, bubbleX, bubbleY, bubbleWidth, bubbleHeight, bubbleRadius);
+          context.fill();
+          context.strokeStyle = toRgba(node.color, 0.35);
+          context.lineWidth = 1 / cam.zoom;
+          context.stroke();
 
-          ctx.fillStyle = '#e8e6e1';
-          ctx.fillText(label, bubbleX + bubblePadX, bubbleY + bubbleHeight / 2);
+          context.fillStyle = '#e8e6e1';
+          context.fillText(label, bubbleX + bubblePadX, bubbleY + bubbleHeight / 2);
         }
       }
 
-      ctx.restore();
+      context.restore();
       state.animFrame = requestAnimationFrame(draw);
     }
 
     function onMouseMove(e: MouseEvent) {
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const deltaPx = Math.hypot(mx - state.mouse.x, my - state.mouse.y);
@@ -351,21 +360,21 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
       }
 
       state.mouse.hoveredNode = hovered;
-      canvas.style.cursor = hovered !== null ? 'pointer' : state.mouse.down ? 'grabbing' : 'grab';
+      canvasEl.style.cursor = hovered !== null ? 'pointer' : state.mouse.down ? 'grabbing' : 'grab';
     }
 
     function onMouseDown(e: MouseEvent) {
       state.mouse.down = true;
       state.mouse.dragged = false;
       state.mouse.downNode = state.mouse.hoveredNode;
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       state.mouse.x = e.clientX - rect.left;
       state.mouse.y = e.clientY - rect.top;
 
       if (state.mouse.hoveredNode !== null) {
         state.mouse.dragNode = state.mouse.hoveredNode;
       }
-      canvas.style.cursor = 'grabbing';
+      canvasEl.style.cursor = 'grabbing';
     }
 
     function onMouseUp() {
@@ -382,7 +391,7 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
       state.mouse.dragNode = null;
       state.mouse.downNode = null;
       state.mouse.dragged = false;
-      canvas.style.cursor = state.mouse.hoveredNode !== null ? 'pointer' : 'grab';
+      canvasEl.style.cursor = state.mouse.hoveredNode !== null ? 'pointer' : 'grab';
     }
 
     function onMouseLeave() {
@@ -391,7 +400,7 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
       state.mouse.hoveredNode = null;
       state.mouse.downNode = null;
       state.mouse.dragged = false;
-      canvas.style.cursor = 'grab';
+      canvasEl.style.cursor = 'grab';
     }
 
     function onWheel(e: WheelEvent) {
@@ -412,21 +421,21 @@ export function GraphCanvas({ leaves, accentRgb, onSelectNode }: GraphCanvasProp
 
     window.addEventListener('resize', resize);
     document.addEventListener('visibilitychange', onVisibilityChange);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mouseleave', onMouseLeave);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvasEl.addEventListener('mousemove', onMouseMove);
+    canvasEl.addEventListener('mousedown', onMouseDown);
+    canvasEl.addEventListener('mouseup', onMouseUp);
+    canvasEl.addEventListener('mouseleave', onMouseLeave);
+    canvasEl.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
       if (state.animFrame !== null) cancelAnimationFrame(state.animFrame);
       window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mouseleave', onMouseLeave);
-      canvas.removeEventListener('wheel', onWheel);
+      canvasEl.removeEventListener('mousemove', onMouseMove);
+      canvasEl.removeEventListener('mousedown', onMouseDown);
+      canvasEl.removeEventListener('mouseup', onMouseUp);
+      canvasEl.removeEventListener('mouseleave', onMouseLeave);
+      canvasEl.removeEventListener('wheel', onWheel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- canvas RAF + listeners mount once; data/accent sync below.
   }, []);

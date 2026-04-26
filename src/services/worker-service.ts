@@ -306,6 +306,11 @@ export class WorkerService {
     this.server.registerRoutes(new LogsRoutes());
     this.server.registerRoutes(new MemoryRoutes(this.dbManager, 'claude-mem'));
     this.server.registerRoutes(new DashboardRoutes(this.dbManager, this.sessionManager, this.sseBroadcaster, this.startTime));
+
+    // Finalize routes after all primary handlers are registered.
+    // Note: Search/Corpus routes registered later in initializeBackground()
+    // will still work as they use the same routeApp router.
+    this.server.finalizeRoutes();
   }
 
   /**

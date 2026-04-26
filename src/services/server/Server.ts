@@ -71,13 +71,16 @@ export interface ServerOptions {
  */
 export class Server {
   readonly app: Application;
+  private readonly routeApp: Application;
   private server: http.Server | null = null;
   private readonly options: ServerOptions;
   private readonly startTime: number = Date.now();
+  private routesFinalized = false;
 
   constructor(options: ServerOptions) {
     this.options = options;
     this.app = express();
+    this.routeApp = express();
     this.setupMiddleware();
     this.setupCoreRoutes();
   }
@@ -134,7 +137,7 @@ export class Server {
    * Register a route handler
    */
   registerRoutes(handler: RouteHandler): void {
-    handler.setupRoutes(this.app);
+    handler.setupRoutes(this.routeApp);
   }
 
   /**
@@ -142,6 +145,13 @@ export class Server {
    * Call this after all routes have been registered
    */
   finalizeRoutes(): void {
+    if (this.routesFinalized) return;
+    this.routesFinalized = true;
+
+    // Mount route handlers before the terminal middleware so later route
+    // registrations continue working without reordering 404/error handlers.
+    this.app.use(this.routeApp);
+
     // 404 handler for unmatched routes
     this.app.use(notFoundHandler);
 

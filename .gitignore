@@ -38,3 +38,8 @@ src/ui/viewer.html
 
 # Local contribution analysis (not part of upstream)
 CONTRIB_NOTES.md
+
+# Tauri desktop build artifacts
+src-tauri/target/
+src-tauri/bin/
+src-tauri/gen/

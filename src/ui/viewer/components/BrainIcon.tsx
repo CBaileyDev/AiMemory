@@ -3,13 +3,14 @@ import React from 'react';
 interface BrainIconProps {
   className?: string;
   glow?: boolean;
+  thinking?: boolean;
 }
 
 /** Hexagonal neural-core logomark (design handoff — not a literal brain silhouette). */
-export function BrainIcon({ className, glow = false }: BrainIconProps) {
+export function BrainIcon({ className, glow = false, thinking = false }: BrainIconProps) {
   return (
     <svg
-      className={className}
+      className={`${className} am-brain-icon ${thinking ? 'is-thinking' : ''}`}
       viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

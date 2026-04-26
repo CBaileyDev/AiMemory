@@ -9,6 +9,7 @@ interface PanelProps extends React.HTMLAttributes<HTMLDivElement> {
   padding?: PadToken;
   radius?: 'sm' | 'md' | 'lg';
   as?: keyof JSX.IntrinsicElements;
+  children?: React.ReactNode;
 }
 
 function padVar(p: PadToken): string {

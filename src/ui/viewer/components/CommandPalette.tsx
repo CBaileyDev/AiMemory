@@ -23,7 +23,7 @@ interface CommandPaletteProps {
 type PaletteItem =
   | { kind: 'observation'; obs: Observation; score: number }
   | { kind: 'action'; action: PaletteAction; score: number }
-  | { kind: 'ask'; question: string };
+  | { kind: 'ask'; question: string; score: number };
 
 export function CommandPalette({
   isOpen, onClose, observations, actions, onJumpToObservation, onAsk
@@ -50,7 +50,7 @@ export function CommandPalette({
     const isAsk = trimmed.startsWith('?');
     if (isAsk) {
       const q = trimmed.slice(1).trim();
-      return [{ kind: 'ask', question: q }];
+      return [{ kind: 'ask', question: q, score: 0 }];
     }
     if (!trimmed) {
       // default view: 5 most recent observations + all actions
