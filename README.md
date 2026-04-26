@@ -12,9 +12,15 @@ Install once, and your context follows you across Claude Code, Claude Desktop, C
 [![15 IDEs](https://img.shields.io/badge/IDE%20integrations-15-8b5cf6.svg)](#supported-ides)
 [![Tests](https://img.shields.io/badge/e2e%20tests-105%20passing-22c55e.svg)](#testing)
 
-[Quick start](#quick-start) · [Supported IDEs](#supported-ides) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Contributing](#contributing) · [License](#license)
+[Quick start](#quick-start) · [Local viewer](#local-viewer) · [Supported IDEs](#supported-ides) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Contributing](#contributing) · [License](#license)
 
 </div>
+
+<p align="center">
+  <img src="docs/public/images/viewer-feed.png" alt="AiMemory viewer — feed route showing token savings, real-time observations, and rich filters at localhost:37777" width="100%" />
+  <br/>
+  <sub><i>The local viewer at <code>http://localhost:37777</code> — every session captured by every IDE you use, in one place.</i></sub>
+</p>
 
 ---
 
@@ -74,6 +80,27 @@ npx claude-mem stop
 ```
 
 Open the viewer at `http://localhost:37777/`.
+
+---
+
+## Local viewer
+
+Three first-class views, one workspace, zero remote calls. The worker streams new memories over SSE so the UI updates in real time as you work — no polling, no refresh.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<a href="docs/public/images/viewer-graph.png"><img src="docs/public/images/viewer-graph.png" alt="Memory Atlas — interactive cluster graph" /></a>
+<p align="center"><sub><b>Memory Atlas</b> · clusters by source, cross-links, sub-clusters at zoom, sticky inspector</sub></p>
+</td>
+<td width="50%" valign="top">
+<a href="docs/public/images/viewer-sources.png"><img src="docs/public/images/viewer-sources.png" alt="Sources dashboard — capture health across every connected IDE" /></a>
+<p align="center"><sub><b>Sources</b> · live capture health for every IDE you've installed, with WoW deltas and last-event freshness</sub></p>
+</td>
+</tr>
+</table>
+
+Press <kbd>⌘</kbd>+<kbd>K</kbd> anywhere to open the command palette. Press <kbd>⌘</kbd>+<kbd>J</kbd> to ask a natural-language question across every memory you've captured.
 
 ---
 
