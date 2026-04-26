@@ -31,17 +31,38 @@ export const SYSTEM_REMINDER_REGEX = /<system-reminder>[\s\S]*?<\/system-reminde
 const MAX_TAG_COUNT = 100;
 
 /**
+ * Known opening tags that participate in the ReDoS / volume guard. Longer
+ * prefixes are checked first so e.g. `<system-instruction>` is not double-counted
+ * as part of a shorter key.
+ * Performance: one scan of the string (O(n)) instead of six full-string RegExp
+ * .match() passes, which is cheaper on large tool payloads and user prompts
+ * (SessionRoutes and hooks call stripping on every relevant request).
+ */
+const OPENING_TAG_PREFIXES: readonly string[] = [
+  '<claude-mem-context>',
+  '<system-instruction>',
+  '<system_instruction>',
+  '<persisted-output>',
+  '<system-reminder>',
+  '<private>',
+];
+
+/**
  * Count total number of opening tags in content
  * Used for ReDoS protection before regex processing
  */
 function countTags(content: string): number {
-  const privateCount = (content.match(/<private>/g) || []).length;
-  const contextCount = (content.match(/<claude-mem-context>/g) || []).length;
-  const systemInstructionCount = (content.match(/<system_instruction>/g) || []).length;
-  const systemInstructionHyphenCount = (content.match(/<system-instruction>/g) || []).length;
-const persistedOutputCount = (content.match(/<persisted-output>/g) || []).length;
-  const systemReminderCount = (content.match(/<system-reminder>/g) || []).length;
-  return privateCount + contextCount + systemInstructionCount + systemInstructionHyphenCount + persistedOutputCount + systemReminderCount;
+  let count = 0;
+  for (let i = 0; i < content.length; i++) {
+    if (content.charCodeAt(i) !== 60) continue; // '<' — fast path for non-tag text
+    for (const prefix of OPENING_TAG_PREFIXES) {
+      if (content.startsWith(prefix, i)) {
+        count++;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
 /**
@@ -65,7 +86,7 @@ function stripTagsInternal(content: string): string {
     .replace(/<private>[\s\S]*?<\/private>/g, '')
     .replace(/<system_instruction>[\s\S]*?<\/system_instruction>/g, '')
     .replace(/<system-instruction>[\s\S]*?<\/system-instruction>/g, '')
-.replace(/<persisted-output>[\s\S]*?<\/persisted-output>/g, '')
+    .replace(/<persisted-output>[\s\S]*?<\/persisted-output>/g, '')
     .replace(SYSTEM_REMINDER_REGEX, '')
     .trim();
 }
