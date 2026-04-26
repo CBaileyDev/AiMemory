@@ -16,6 +16,10 @@ import { MemoryCard, MemoryCardItem } from './components/MemoryCard';
 import { Inspector } from './components/Inspector';
 import { useSSE } from './hooks/useSSE';
 import { useSettings } from './hooks/useSettings';
+import { usePagination } from './hooks/usePagination';
+import { useTheme } from './hooks/useTheme';
+import { useRoute } from './hooks/useRoute';
+import { useFilterState } from './hooks/useFilterState';
 import { useSourcesDashboard } from './hooks/useSourcesDashboard';
 import { useStats } from './hooks/useStats';
 import { Observation, Summary, UserPrompt } from './types';
@@ -81,7 +85,7 @@ function parseFileList(raw: string | null): string[] {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
   } catch {
-    // not JSON — fall through
+    // not JSON
   }
   return raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
 }
@@ -134,25 +138,18 @@ function promptToCard(p: UserPrompt): MemoryCardItem {
 export function App() {
   const [logsModalOpen, setLogsModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [consoleOpen, setConsoleOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [askInitial, setAskInitial] = useState<string | undefined>();
   const [helpOpen, setHelpOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const [selectedMemId, setSelectedMemId] = useState<number | null>(null);
 
-  const [paginatedObs, setPaginatedObs] = useState<Observation[]>([]);
-  const [paginatedSum, setPaginatedSum] = useState<Summary[]>([]);
+  const [paginatedObservations, setPaginatedObservations] = useState<Observation[]>([]);
+  const [paginatedSummaries, setPaginatedSummaries] = useState<Summary[]>([]);
   const [paginatedPrompts, setPaginatedPrompts] = useState<UserPrompt[]>([]);
 
-  const [consoleLog, setConsoleLog] = useState<ConsoleEvent[]>([]);
-  const [toastInfo, setToastInfo] = useState<{
-    visible: boolean;
-    obsId: number | null;
-    source: string | null;
-    type: string | null;
-    saved: number;
-  }>({ visible: false, obsId: null, source: null, type: null, saved: 0 });
+  const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
+  const prevLiveIds = useRef<Set<number>>(new Set());
 
   const { route, go } = useRoute();
   const { state: filterState, dispatch: filterDispatch } = useFilterState();
@@ -277,19 +274,21 @@ export function App() {
         pagination.summaries.loadMore(),
         pagination.prompts.loadMore()
       ]);
-      if (newObs.length) setPaginatedObs(prev => [...prev, ...(newObs as Observation[])]);
-      if (newSum.length) setPaginatedSum(prev => [...prev, ...(newSum as Summary[])]);
-      if (newP.length) setPaginatedPrompts(prev => [...prev, ...(newP as UserPrompt[])]);
-    } catch (err) {
-      pushConsole('err', 'paginate', `loadMore failed: ${(err as Error).message}`);
+      if (newObs.length) setPaginatedObservations(prev => [...prev, ...newObs]);
+      if (newSum.length) setPaginatedSummaries(prev => [...prev, ...newSum]);
+      if (newP.length) setPaginatedPrompts(prev => [...prev, ...newP]);
+    } catch (e) {
+      console.error('[App] loadMore failed:', e);
     }
   }, [pagination.observations, pagination.summaries, pagination.prompts]);
 
-  // Initial paginated load on mount
   useEffect(() => {
+    setPaginatedObservations([]);
+    setPaginatedSummaries([]);
+    setPaginatedPrompts([]);
     handleLoadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [primaryProject, primarySource]);
 
   useEffect(() => {
     let gTimer: number | null = null;
@@ -305,20 +304,12 @@ export function App() {
         setAskOpen(true);
         return;
       }
-      if (e.key === 'Escape') {
-        setPaletteOpen(false);
-        setAskOpen(false);
-        setHelpOpen(false);
-        return;
-      }
       if (inField) return;
       if (e.key === '?') { e.preventDefault(); setHelpOpen(true); return; }
       if (e.key === 'Escape') { setPaletteOpen(false); setAskOpen(false); setHelpOpen(false); return; }
       if (e.key.toLowerCase() === 'g') {
         if (gTimer) window.clearTimeout(gTimer);
-        gTimer = window.setTimeout(() => {
-          gTimer = null;
-        }, 700);
+        gTimer = window.setTimeout(() => { gTimer = null; }, 700);
         return;
       }
       if (gTimer) {
@@ -330,30 +321,11 @@ export function App() {
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      if (gTimer) window.clearTimeout(gTimer);
-    };
+    return () => { window.removeEventListener('keydown', onKey); if (gTimer) window.clearTimeout(gTimer); };
   }, [go]);
 
-  // Listeners for header doctor button
-  useEffect(() => {
-    const onDoctor = () => pushConsole('info', 'doctor', 'doctor invoked from header');
-    window.addEventListener('aimemory:doctor', onDoctor);
-    return () => window.removeEventListener('aimemory:doctor', onDoctor);
-  }, [pushConsole]);
-
-  const onJump = useCallback(
-    (id: number) => {
-      go('feed');
-      setHighlightedId(id);
-      window.setTimeout(() => setHighlightedId(null), 1500);
-    },
-    [go]
-  );
-
-  const onAsk = useCallback((q: string) => {
-    setAskInitial(q);
+  const onAskSubmit = useCallback((question: string) => {
+    setAskInitial(question);
     setAskOpen(true);
   }, []);
 
@@ -364,9 +336,17 @@ export function App() {
     window.setTimeout(() => setHighlightedId(null), 1500);
   }, [go]);
 
-  const onDoctor = useCallback(() => {
-    pushConsole('info', 'doctor', 'doctor invoked from header');
-  }, [pushConsole]);
+  const paletteActions = useMemo<PaletteAction[]>(() => [
+    { id: 'open-feed', label: 'Open feed', shortcut: ['g', 'h'], run: () => go('feed') },
+    { id: 'open-graph', label: 'Open memory graph', shortcut: ['g', 'v'], run: () => go('graph') },
+    { id: 'open-sources', label: 'Open sources dashboard', shortcut: ['g', 's'], run: () => go('sources') },
+    { id: 'open-settings', label: 'Open settings', shortcut: ['g', 'c'], run: () => go('settings') },
+    { id: 'open-logs', label: 'Open logs', run: () => setLogsModalOpen(true) },
+    { id: 'cycle-scheme', label: 'Cycle color scheme', run: () => cycleScheme() },
+    { id: 'open-ask', label: 'Open ask panel', shortcut: ['⌘', 'J'], run: () => { setAskInitial(undefined); setAskOpen(true); } },
+    { id: 'clear-filters', label: 'Clear all filters', shortcut: ['Esc'], run: () => filterDispatch({ kind: 'clearAll' }) },
+    { id: 'docs', label: 'Open documentation', run: () => window.open('https://docs.claude-mem.ai', '_blank') }
+  ], [go, cycleScheme, filterDispatch]);
 
   const totalMemories = dashboardData?.totals.total ?? graphObservations.length + graphSummaries.length + graphPrompts.length;
 
@@ -390,11 +370,11 @@ export function App() {
   }, [filterDispatch, filterState]);
 
   const dayGroups = useMemo(() => {
-    type Item = { card: MemoryCardItem; epoch: number; raw: 'obs' | 'summary' | 'prompt' };
+    type Item = { card: MemoryCardItem; epoch: number };
     const items: Item[] = [
-      ...allObservations.map((o) => ({ card: obsToCard(o, freshIds.has(o.id)), epoch: o.created_at_epoch, raw: 'obs' as const })),
-      ...allSummaries.map((s) => ({ card: summaryToCard(s), epoch: s.created_at_epoch, raw: 'summary' as const })),
-      ...allPrompts.map((p) => ({ card: promptToCard(p), epoch: p.created_at_epoch, raw: 'prompt' as const }))
+      ...allObservations.map((o) => ({ card: obsToCard(o, freshIds.has(o.id)), epoch: o.created_at_epoch })),
+      ...allSummaries.map((s) => ({ card: summaryToCard(s), epoch: s.created_at_epoch })),
+      ...allPrompts.map((p) => ({ card: promptToCard(p), epoch: p.created_at_epoch }))
     ];
     items.sort((a, b) => b.epoch - a.epoch);
     const groups = new Map<string, MemoryCardItem[]>();
@@ -443,7 +423,7 @@ export function App() {
 
       <Header
         route={route}
-        setRoute={go}
+        onRouteChange={go}
         isConnected={isConnected}
         isProcessing={isProcessing}
         queueDepth={queueDepth}
@@ -549,37 +529,29 @@ export function App() {
         )}
 
         {route === 'graph' && (
-          <GraphRoute items={feedItems} isConnected={isConnected} onJump={onJump} />
-        )}
-
-        {route === 'sources' && (
-          <SourcesRoute
-            dashboard={dashboard}
-            detectedSources={detectedSources}
-            isConnected={isConnected}
+          <GraphPage
+            observations={graphObservations}
+            summaries={graphSummaries}
+            prompts={graphPrompts}
+            onJumpToObservation={onJumpToObservation}
           />
         )}
+
+        {route === 'sources' && <SourcesDashboard />}
 
         {route === 'settings' && (
-          <SettingsRoute
+          <SettingsPage
+            variant="page"
             settings={settings}
-            scheme={scheme}
-            onSchemeChange={s => setScheme(s as NeonScheme)}
             onSave={saveSettings}
-            saveStatus={mapSaveStatus(saveStatus, isSaving)}
-            detectedSources={detectedSources}
-            workerVersion={workerVersion}
-            totals={totalsForSettings}
+            isSaving={isSaving}
+            saveStatus={saveStatus}
+            scheme={scheme}
+            onSchemeChange={setScheme}
+            detectedSources={sources}
+            onClose={() => go('feed')}
           />
         )}
-
-        <ConsoleDrawer
-          open={consoleOpen}
-          isConnected={isConnected}
-          isProcessing={isProcessing}
-          queueDepth={queueDepth}
-          recentEvents={consoleLog}
-        />
       </main>
 
       <StatusBar
@@ -595,34 +567,17 @@ export function App() {
       <CommandPalette
         isOpen={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onNavigate={r => go(r)}
-        onJump={onJump}
-        onAsk={onAsk}
-        onCycleScheme={cycleScheme}
-        onToggleConsole={() => setConsoleOpen(c => !c)}
-        items={feedItems}
-      />
-
-      <NewMemoryToast
-        visible={toastInfo.visible && route === 'feed'}
-        obsId={toastInfo.obsId}
-        source={toastInfo.source}
-        type={toastInfo.type}
-        saved={toastInfo.saved}
-        onView={() => {
-          if (toastInfo.obsId != null) onJump(toastInfo.obsId);
-          setToastInfo(s => ({ ...s, visible: false }));
-        }}
+        observations={[...observations, ...paginatedObservations]}
+        actions={paletteActions}
+        onJumpToObservation={onJumpToObservation}
+        onAsk={onAskSubmit}
       />
 
       <AskPanel
         isOpen={askOpen}
         initialQuestion={askInitial}
         onClose={() => setAskOpen(false)}
-        onCiteClick={(id: number) => {
-          setAskOpen(false);
-          onJump(id);
-        }}
+        onCiteClick={(id) => { setAskOpen(false); onJumpToObservation(id); }}
       />
 
       <KeyboardHelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -631,37 +586,3 @@ export function App() {
     </div>
   );
 }
-
-function mapSaveStatus(raw: string, isSaving: boolean): 'idle' | 'saving' | 'saved' | 'error' {
-  if (isSaving) return 'saving';
-  if (raw === 'saved' || raw === 'success') return 'saved';
-  if (raw === 'error' || raw === 'failed') return 'error';
-  return 'idle';
-}
-
-function mergeUniqueById<T extends { id: number }>(a: T[], b: T[]): T[] {
-  const seen = new Set<number>();
-  const out: T[] = [];
-  for (const x of a) {
-    if (seen.has(x.id)) continue;
-    seen.add(x.id);
-    out.push(x);
-  }
-  for (const x of b) {
-    if (seen.has(x.id)) continue;
-    seen.add(x.id);
-    out.push(x);
-  }
-  return out;
-}
-
-export function AppRoot() {
-  return (
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  );
-}
-
-// Re-export App for compatibility
-export { App };
