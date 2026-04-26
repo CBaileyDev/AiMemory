@@ -273,8 +273,9 @@ export function SettingsPage(props: SettingsPageProps) {
         </Row>
 
         {/* Body: left nav + right scroller */}
-        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div className="am-settings-layout" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           <nav
+            className="am-settings-nav"
             aria-label="Settings sections"
             style={{
               flex: '0 0 240px',
@@ -284,7 +285,12 @@ export function SettingsPage(props: SettingsPageProps) {
               overflowY: 'auto'
             }}
           >
-            <Stack gap="1" as="ul" style={{ margin: 0, padding: 0, listStyle: 'none' } as React.CSSProperties}>
+            <Stack
+              className="am-settings-nav-list"
+              gap="1"
+              as="ul"
+              style={{ margin: 0, padding: 0, listStyle: 'none' } as React.CSSProperties}
+            >
               {SETTINGS_SECTIONS.map((s: SettingsSectionDef) => {
                 const active = activeId === s.id;
                 return (
@@ -314,6 +320,7 @@ export function SettingsPage(props: SettingsPageProps) {
           </nav>
 
           <div
+            className="am-settings-scroller"
             ref={scrollerRef}
             style={{
               flex: 1,

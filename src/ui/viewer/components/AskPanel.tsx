@@ -111,8 +111,10 @@ export function AskPanel({ isOpen, initialQuestion, onClose, onCiteClick }: AskP
     }
   }, [historyCursor, onClose, question, submit]);
 
+  if (!isOpen) return null;
+
   return (
-    <div className={`am-ask ${isOpen ? 'is-open' : ''}`} role="dialog" aria-label="Ask memory">
+    <div className="am-ask is-open" role="dialog" aria-label="Ask memory">
       <div className="am-ask__head">
         <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>Ask memory</strong>
         <button

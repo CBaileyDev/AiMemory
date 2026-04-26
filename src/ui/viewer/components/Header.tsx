@@ -1,10 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React from 'react';
 import type { NeonScheme } from '../hooks/useTheme';
 import { useSpinningFavicon } from '../hooks/useSpinningFavicon';
 import type { Route } from '../hooks/useRoute';
-import { KeyboardShortcut } from './primitives/KeyboardShortcut';
-import { BrainIcon } from './BrainIcon';
-import { SchemePicker } from './primitives/SchemePicker';
 
 interface HeaderProps {
   route: Route;
@@ -16,154 +13,89 @@ interface HeaderProps {
   onSchemeChange: (t: NeonScheme) => void;
   onOpenPalette: () => void;
   onOpenHelp: () => void;
+  onToggleConsole: () => void;
+  consoleOpen: boolean;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  workerPort: number;
 }
 
-function StatusPulse({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`am-status-pulse ${active ? 'is-active' : 'is-offline'}`}
-      aria-hidden="true"
-    >
-      <span className="am-status-pulse__ring" />
-      <span className="am-status-pulse__dot" />
-    </span>
-  );
-}
+const ICONS = {
+  search: (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  ),
+  bug: (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 7V5a3 3 0 1 1 6 0v2M5 11h14M5 15h14M12 7v14M5 11a4 4 0 0 0 4-4h6a4 4 0 0 0 4 4M3 13H1M23 13h-2M3 18h2M19 18h2" />
+    </svg>
+  ),
+  refresh: (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16M3 21v-5h5" />
+    </svg>
+  ),
+  logs: (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="m7 8 3 3-3 3M13 14h4" />
+    </svg>
+  )
+};
 
 export function Header({
-  route,
-  onRouteChange,
   isConnected,
   isProcessing,
-  queueDepth,
-  scheme,
-  onSchemeChange,
   onOpenPalette,
-  onOpenHelp,
-  searchQuery,
-  onSearchChange
+  onToggleConsole,
+  consoleOpen,
+  workerPort
 }: HeaderProps) {
   useSpinningFavicon(isProcessing);
 
-  const navRef = useRef<HTMLElement>(null);
-  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
-
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    const activeTab = nav.querySelector('.am-topnav__link.is-active') as HTMLElement;
-    if (activeTab) {
-      setIndicatorStyle({
-        width: `${activeTab.offsetWidth}px`,
-        transform: `translateX(${activeTab.offsetLeft}px)`,
-        opacity: 1
-      });
-    }
-  }, [route]);
-
-  const mkNavHandler = useCallback((r: Route) => () => onRouteChange(r), [onRouteChange]);
+  const status: 'ok' | 'warn' | 'err' = isConnected ? 'ok' : 'err';
+  const statusColor =
+    status === 'ok' ? 'var(--ok)' : status === 'warn' ? 'var(--warn)' : 'var(--err)';
+  const statusText =
+    status === 'ok'
+      ? `worker live · :${workerPort}`
+      : status === 'warn'
+        ? 'reconnecting…'
+        : 'offline';
 
   return (
-    <div className="header am-header-neon" style={{ gap: 'var(--space-4)' }}>
-      <div className="header-main" style={{ gap: 'var(--space-5)' }}>
-        <div className="am-header-neon__brand">
-          <h1 className="am-logo-lockup">
-            <span className="am-logo-mark-wrap">
-              <BrainIcon 
-                className="logomark logo-neon" 
-                glow 
-                thinking={isProcessing} 
-              />
-              {queueDepth > 0 && <span className="queue-bubble">{queueDepth}</span>}
-            </span>
-            <span className="am-logo-copy">
-              <span className="am-logo-wordmark">aimemory</span>
-              <span className="am-header-neon__connection" aria-live="polite">
-                <StatusPulse active={isConnected} />
-                <span className="am-visually-hidden">
-                  {isConnected ? 'Worker connected' : 'Worker offline'}
-                </span>
-                {!isConnected && <span className="am-header-neon__offline">offline</span>}
-              </span>
-            </span>
-          </h1>
-        </div>
+    <header className="hdr">
+      <button type="button" className="hdr-search" onClick={onOpenPalette}>
+        <span className="hdr-search-icon">{ICONS.search}</span>
+        <span className="hdr-search-text">Ask, search memory, or run a command…</span>
+        <span className="hdr-search-shortcut">
+          <span className="kbd">⌘</span>
+          <span className="kbd">K</span>
+        </span>
+      </button>
 
-        <nav className="am-topnav" aria-label="Primary" ref={navRef} style={{ position: 'relative' }}>
-          <div className="am-topnav__indicator" style={indicatorStyle} />
-          <button type="button" className={`am-topnav__link ${route === 'feed' ? 'is-active' : ''}`} onClick={mkNavHandler('feed')} title="Feed">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            <span className="am-nav-label">Feed</span>
-          </button>
-          <button type="button" className={`am-topnav__link ${route === 'graph' ? 'is-active' : ''}`} onClick={mkNavHandler('graph')} title="Graph">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            <span className="am-nav-label">Graph</span>
-          </button>
-          <button type="button" className={`am-topnav__link ${route === 'sources' ? 'is-active' : ''}`} onClick={mkNavHandler('sources')} title="Sources">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-            <span className="am-nav-label">Sources</span>
-          </button>
-          <button type="button" className={`am-topnav__link ${route === 'settings' ? 'is-active' : ''}`} onClick={mkNavHandler('settings')} title="Settings">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-            <span className="am-nav-label">Settings</span>
-          </button>
-        </nav>
+      <div className="hdr-actions">
+        <button type="button" className="hdr-btn" title="Run doctor">
+          {ICONS.bug} Doctor
+        </button>
+        <button type="button" className="hdr-btn" title="Force resync">
+          {ICONS.refresh} Sync
+        </button>
+        <button
+          type="button"
+          className={`hdr-btn ${consoleOpen ? 'is-pressed' : ''}`}
+          onClick={onToggleConsole}
+          title="Worker console (⌘\\)"
+        >
+          {ICONS.logs} Console
+        </button>
+        <span style={{ width: 1, height: 20, background: 'var(--line-2)', margin: '0 4px' }} />
+        <span className="src" style={{ fontSize: 12, color: statusColor }}>
+          {statusText}
+        </span>
       </div>
-
-      <div className="status am-header-neon__tools" style={{ gap: 'var(--space-3)' }}>
-        <div className="am-search am-header-neon__search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input
-            type="search"
-            placeholder="Search memory…"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            aria-label="Search memory"
-          />
-          <span className="am-search__hint am-mono" aria-hidden="true">
-            ⌘K
-          </span>
-        </div>
-
-        <div className="am-header-neon__actions">
-          <SchemePicker
-            scheme={scheme}
-            onSchemeChange={onSchemeChange}
-            className="am-header-neon__scheme-picker"
-            label="Header accent scheme"
-          />
-
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            className="am-topnav__link am-header-neon__toolbtn"
-            title="Open command palette (⌘K)"
-            aria-label="Open command palette"
-          >
-            <KeyboardShortcut keys={['⌘', 'K']} />
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenHelp}
-            className="am-topnav__link am-header-neon__toolbtn"
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
+    </header>
   );
 }

@@ -1,53 +1,145 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { Header } from './components/Header';
+import { SettingsPage } from './components/settings/SettingsPage';
+import { LogsDrawer } from './components/LogsModal';
+import { SourcesDashboard } from './components/SourcesDashboard';
+import { CommandPalette, PaletteAction } from './components/CommandPalette';
 import { AskPanel } from './components/AskPanel';
 import { KeyboardHelpModal } from './components/KeyboardHelpModal';
-import {
-  Rail,
-  AppHeader,
-  StatusBar,
-  ConsoleDrawer,
-  OfflineBanner,
-  NewMemoryToast,
-  type ConsoleEvent
-} from './components/Shell';
-import { CommandPaletteV2 } from './components/CommandPaletteV2';
-import { FeedRoute } from './components/FeedRoute';
-import { GraphRoute } from './components/GraphRoute';
-import { SourcesRoute } from './components/SourcesRoute';
-import { SettingsRoute } from './components/SettingsRoute';
-import {
-  observationToFeedItem,
-  summaryToFeedItem,
-  promptToFeedItem,
-  type FeedItem
-} from './components/feedTypes';
+import { GraphPage } from './components/GraphPage';
+import { Sidebar } from './components/Sidebar';
+import { RightRail } from './components/RightRail';
+import { StatusBar } from './components/StatusBar';
+import { MemoryEconomy } from './components/MemoryEconomy';
+import { FilterBar } from './components/FilterBar';
+import { MemoryCard, MemoryCardItem } from './components/MemoryCard';
+import { Inspector } from './components/Inspector';
 import { useSSE } from './hooks/useSSE';
 import { useSettings } from './hooks/useSettings';
 import { useSourcesDashboard } from './hooks/useSourcesDashboard';
-import { useTheme, type NeonScheme } from './hooks/useTheme';
-import { useRoute } from './hooks/useRoute';
-import { usePagination } from './hooks/usePagination';
-import { sourceMeta, normalizeTypeKey } from './components/registry';
-import type { Observation, Summary, UserPrompt } from './types';
+import { useStats } from './hooks/useStats';
+import { Observation, Summary, UserPrompt } from './types';
+import { mergeAndDeduplicateByProject } from './utils/data';
+import { matchesFilter } from './state/filterReducer';
 
-const FRESH_TTL_MS = 4000;
-const MAX_CONSOLE_EVENTS = 200;
+const APP_VERSION = '12.1.5';
+const WORKER_PORT = 37777;
+const FRESH_ID_TTL_MS = 4000;
 
-function App() {
-  const { route, go } = useRoute();
-  const { observations, summaries, prompts, sources: detectedSources, isProcessing, queueDepth, isConnected } = useSSE();
-  const { settings, saveSettings, isSaving, saveStatus } = useSettings();
-  const { scheme, setScheme, cycleScheme } = useTheme();
-  const { data: dashboard, refresh: refreshDashboard } = useSourcesDashboard(true);
+function normalizeFeedType(type?: string | null): string | undefined {
+  if (!type) return undefined;
+  const normalized = type.trim().toLowerCase().replace(/_/g, '-');
+  switch (normalized) {
+    case 'learned':
+    case 'decision':
+      return 'learned';
+    case 'completed':
+    case 'feature':
+      return 'completed';
+    case 'investigated':
+    case 'refactor':
+      return 'investigated';
+    case 'next-steps':
+    case 'discovery':
+      return 'next-steps';
+    case 'bug':
+    case 'bugfix':
+      return 'bugfix';
+    default:
+      return normalized;
+  }
+}
 
+function inferSummaryType(summary: Summary): string {
+  if (summary.learned?.trim()) return 'learned';
+  if (summary.completed?.trim()) return 'completed';
+  if (summary.investigated?.trim()) return 'investigated';
+  if (summary.next_steps?.trim()) return 'next-steps';
+  return 'completed';
+}
+
+function dayBucket(epochMs: number): string {
+  const d = new Date(epochMs);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const startOfDay = new Date(d);
+  startOfDay.setHours(0, 0, 0, 0);
+  if (startOfDay.getTime() === today.getTime()) return 'Today';
+  if (startOfDay.getTime() === yesterday.getTime()) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatTimeOfDay(epochMs: number): string {
+  return new Date(epochMs).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function parseFileList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
+  } catch {
+    // not JSON — fall through
+  }
+  return raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+}
+
+function obsToCard(o: Observation, fresh: boolean): MemoryCardItem {
+  const files = [...parseFileList(o.files_modified), ...parseFileList(o.files_read)];
+  return {
+    id: o.id,
+    type: normalizeFeedType(o.type) ?? 'completed',
+    source: o.platform_source ?? 'claude',
+    title: o.title ?? 'Observation',
+    summary: o.narrative ?? o.text ?? '',
+    project: o.project ?? '',
+    files: Array.from(new Set(files)).slice(0, 8),
+    time: formatTimeOfDay(o.created_at_epoch),
+    tokensSaved: 0,
+    isFresh: fresh
+  };
+}
+
+function summaryToCard(s: Summary): MemoryCardItem {
+  const text = [s.learned, s.completed, s.investigated, s.next_steps].filter(Boolean).join(' ');
+  return {
+    id: s.id,
+    type: inferSummaryType(s),
+    source: s.platform_source ?? 'claude',
+    title: s.request ?? 'Session summary',
+    summary: text,
+    project: s.project ?? '',
+    files: [],
+    time: formatTimeOfDay(s.created_at_epoch),
+    tokensSaved: 0
+  };
+}
+
+function promptToCard(p: UserPrompt): MemoryCardItem {
+  return {
+    id: p.id,
+    type: 'prompt',
+    source: p.platform_source ?? 'claude',
+    title: 'Prompt',
+    summary: p.prompt_text ?? '',
+    project: p.project ?? '',
+    files: [],
+    time: formatTimeOfDay(p.created_at_epoch),
+    tokensSaved: 0
+  };
+}
+
+export function App() {
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [askInitial, setAskInitial] = useState<string | undefined>();
   const [helpOpen, setHelpOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
-  const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
+  const [selectedMemId, setSelectedMemId] = useState<number | null>(null);
 
   const [paginatedObs, setPaginatedObs] = useState<Observation[]>([]);
   const [paginatedSum, setPaginatedSum] = useState<Summary[]>([]);
@@ -62,19 +154,122 @@ function App() {
     saved: number;
   }>({ visible: false, obsId: null, source: null, type: null, saved: 0 });
 
-  const [workerVersion, setWorkerVersion] = useState<string>('—');
+  const { route, go } = useRoute();
+  const { state: filterState, dispatch: filterDispatch } = useFilterState();
+  const { observations, summaries, prompts, sources, isProcessing, queueDepth, isConnected } = useSSE();
+  const { settings, saveSettings, isSaving, saveStatus } = useSettings();
+  const { scheme, setScheme, cycleScheme } = useTheme();
+  const { stats } = useStats();
 
-  // Pull /api/stats once for worker version label
+  const { data: dashboardData } = useSourcesDashboard(true);
+
+  const primaryProject = filterState.projects[0] ?? '';
+  const primarySource = filterState.sources[0] ?? 'all';
+  const pagination = usePagination(primaryProject, primarySource);
+
+  const matchesObservation = useCallback((item: Observation) => matchesFilter({
+    platform_source: item.platform_source,
+    project: item.project,
+    type: normalizeFeedType(item.type),
+    created_at_epoch: item.created_at_epoch,
+    title: item.title ?? null,
+    narrative: item.narrative ?? null
+  }, filterState), [filterState]);
+
+  const matchesSummary = useCallback((item: Summary) => matchesFilter({
+    platform_source: item.platform_source,
+    project: item.project,
+    type: inferSummaryType(item),
+    created_at_epoch: item.created_at_epoch,
+    request: item.request ?? null,
+    narrative: [item.learned, item.completed, item.investigated, item.next_steps].filter(Boolean).join(' ')
+  }, filterState), [filterState]);
+
+  const matchesPrompt = useCallback((item: UserPrompt) => matchesFilter({
+    platform_source: item.platform_source,
+    project: item.project,
+    type: 'prompt',
+    created_at_epoch: item.created_at_epoch,
+    prompt_text: item.prompt_text ?? null
+  }, filterState), [filterState]);
+
+  const allObservations = useMemo(() => {
+    const live = observations.filter(matchesObservation);
+    const paginated = paginatedObservations.filter(matchesObservation);
+    return mergeAndDeduplicateByProject(live, paginated);
+  }, [observations, paginatedObservations, matchesObservation]);
+
+  const allSummaries = useMemo(() => {
+    const live = summaries.filter(matchesSummary);
+    const paginated = paginatedSummaries.filter(matchesSummary);
+    return mergeAndDeduplicateByProject(live, paginated);
+  }, [summaries, paginatedSummaries, matchesSummary]);
+
+  const allPrompts = useMemo(() => {
+    const live = prompts.filter(matchesPrompt);
+    const paginated = paginatedPrompts.filter(matchesPrompt);
+    return mergeAndDeduplicateByProject(live, paginated);
+  }, [prompts, paginatedPrompts, matchesPrompt]);
+
+  const graphObservations = useMemo(
+    () => mergeAndDeduplicateByProject(observations, paginatedObservations),
+    [observations, paginatedObservations]
+  );
+  const graphSummaries = useMemo(
+    () => mergeAndDeduplicateByProject(summaries, paginatedSummaries),
+    [summaries, paginatedSummaries]
+  );
+  const graphPrompts = useMemo(
+    () => mergeAndDeduplicateByProject(prompts, paginatedPrompts),
+    [prompts, paginatedPrompts]
+  );
+
   useEffect(() => {
-    fetch('/api/stats')
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => {
-        if (j?.worker?.version) setWorkerVersion(`v${j.worker.version}`);
-      })
-      .catch(() => {});
-  }, []);
+    const current = new Set(observations.map(o => o.id));
+    const newlyArrived: number[] = [];
+    current.forEach(id => { if (!prevLiveIds.current.has(id)) newlyArrived.push(id); });
+    prevLiveIds.current = current;
+    if (newlyArrived.length === 0) return;
+    setFreshIds(prev => {
+      const next = new Set(prev);
+      newlyArrived.forEach(id => next.add(id));
+      return next;
+    });
+    const timer = window.setTimeout(() => {
+      setFreshIds(prev => {
+        const next = new Set(prev);
+        newlyArrived.forEach(id => next.delete(id));
+        return next;
+      });
+    }, FRESH_ID_TTL_MS);
+    return () => window.clearTimeout(timer);
+  }, [observations]);
 
-  const pagination = usePagination('', 'all');
+  const projectCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of [...graphObservations, ...graphSummaries, ...graphPrompts]) {
+      if (item.project) map.set(item.project, (map.get(item.project) ?? 0) + 1);
+    }
+    return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+  }, [graphObservations, graphSummaries, graphPrompts]);
+
+  const totalsSpark = useMemo(() => {
+    const buckets = new Array<number>(14).fill(0);
+    (dashboardData?.sources ?? []).forEach((row) => {
+      const arr = row.sevenDay ?? [];
+      arr.forEach((v, i) => {
+        const bucketIdx = Math.min(buckets.length - 1, Math.max(0, buckets.length - arr.length + i));
+        buckets[bucketIdx] += v;
+      });
+    });
+    return buckets;
+  }, [dashboardData]);
+
+  const sourceTotals = useMemo(
+    () => (dashboardData?.sources ?? []).map((s) => ({ id: s.id, total: s.total })),
+    [dashboardData]
+  );
+
   const handleLoadMore = useCallback(async () => {
     try {
       const [newObs, newSum, newP] = await Promise.all([
@@ -96,122 +291,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pushConsole = useCallback(
-    (level: ConsoleEvent['level'], channel: string, message: string) => {
-      setConsoleLog(prev => {
-        const next = [{ ts: Date.now(), level, channel, message }, ...prev];
-        return next.slice(0, MAX_CONSOLE_EVENTS);
-      });
-    },
-    []
-  );
-
-  // Track fresh observations from SSE for the ringIn animation + toast
-  const prevLiveIds = useRef<Set<number>>(new Set());
-  useEffect(() => {
-    const current = new Set(observations.map(o => o.id));
-    const newlyArrived: Observation[] = [];
-    observations.forEach(o => {
-      if (!prevLiveIds.current.has(o.id)) newlyArrived.push(o);
-    });
-    prevLiveIds.current = current;
-    if (newlyArrived.length === 0) return;
-
-    setFreshIds(prev => {
-      const next = new Set(prev);
-      newlyArrived.forEach(o => next.add(o.id));
-      return next;
-    });
-
-    const latest = newlyArrived[0];
-    const item = observationToFeedItem(latest);
-    setToastInfo({
-      visible: true,
-      obsId: latest.id,
-      source: sourceMeta(latest.platform_source).name,
-      type: normalizeTypeKey(latest.type),
-      saved: item.tokens.saved
-    });
-    pushConsole(
-      'ok',
-      'ingest',
-      `obs#${latest.id} created → ${normalizeTypeKey(latest.type)} · ${
-        latest.platform_source || 'claude'
-      }`
-    );
-    refreshDashboard();
-
-    const t1 = window.setTimeout(() => {
-      setToastInfo(s => ({ ...s, visible: false }));
-    }, 6500);
-    const t2 = window.setTimeout(() => {
-      setFreshIds(prev => {
-        const next = new Set(prev);
-        newlyArrived.forEach(o => next.delete(o.id));
-        return next;
-      });
-    }, FRESH_TTL_MS);
-
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [observations, pushConsole, refreshDashboard]);
-
-  // SSE connection state → console
-  useEffect(() => {
-    pushConsole(
-      isConnected ? 'ok' : 'warn',
-      'sse',
-      isConnected ? 'connected to /sse' : 'connection lost — reconnecting'
-    );
-  }, [isConnected, pushConsole]);
-  useEffect(() => {
-    if (!isProcessing) return;
-    pushConsole('info', 'worker', `processing queue · depth=${queueDepth}`);
-  }, [isProcessing, queueDepth, pushConsole]);
-
-  // Combined feed items, deduped by id+kind, newest first
-  const feedItems: FeedItem[] = useMemo(() => {
-    const merged = [
-      ...mergeUniqueById(observations, paginatedObs).map(observationToFeedItem),
-      ...mergeUniqueById(summaries, paginatedSum).map(summaryToFeedItem),
-      ...mergeUniqueById(prompts, paginatedPrompts).map(promptToFeedItem)
-    ];
-    merged.sort((a, b) => b.created_at_epoch - a.created_at_epoch);
-    return merged;
-  }, [observations, paginatedObs, summaries, paginatedSum, prompts, paginatedPrompts]);
-
-  // Project counts for the rail
-  const projectCounts = useMemo(() => {
-    const m: Record<string, number> = {};
-    feedItems.forEach(it => {
-      if (it.project) m[it.project] = (m[it.project] || 0) + 1;
-    });
-    return m;
-  }, [feedItems]);
-
-  const projects = useMemo(() => Object.keys(projectCounts), [projectCounts]);
-
-  // Keyboard shortcuts
   useEffect(() => {
     let gTimer: number | null = null;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const inField = target && /INPUT|TEXTAREA|SELECT/.test(target.tagName);
-      const cmd = e.metaKey || e.ctrlKey;
-
-      if (cmd && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setPaletteOpen(p => !p);
-        return;
-      }
-      if (cmd && e.key === '\\') {
-        e.preventDefault();
-        setConsoleOpen(c => !c);
-        return;
-      }
-      if (cmd && e.key.toLowerCase() === 'j') {
+      const isModifierOnly = e.ctrlKey || e.metaKey;
+      if (isModifierOnly && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen(true); return; }
+      if (isModifierOnly && e.key === '\\') { e.preventDefault(); setLogsModalOpen(v => !v); return; }
+      if (isModifierOnly && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setAskInitial(undefined);
         setAskOpen(true);
@@ -224,11 +312,8 @@ function App() {
         return;
       }
       if (inField) return;
-      if (e.key === '?') {
-        e.preventDefault();
-        setHelpOpen(true);
-        return;
-      }
+      if (e.key === '?') { e.preventDefault(); setHelpOpen(true); return; }
+      if (e.key === 'Escape') { setPaletteOpen(false); setAskOpen(false); setHelpOpen(false); return; }
       if (e.key.toLowerCase() === 'g') {
         if (gTimer) window.clearTimeout(gTimer);
         gTimer = window.setTimeout(() => {
@@ -238,19 +323,10 @@ function App() {
       }
       if (gTimer) {
         const k = e.key.toLowerCase();
-        if (k === 'h') {
-          go('feed');
-          gTimer = null;
-        } else if (k === 'v') {
-          go('graph');
-          gTimer = null;
-        } else if (k === 's') {
-          go('sources');
-          gTimer = null;
-        } else if (k === 'c') {
-          go('settings');
-          gTimer = null;
-        }
+        if (k === 'h' || k === 'f') { go('feed'); gTimer = null; }
+        else if (k === 's') { go('sources'); gTimer = null; }
+        else if (k === 'v' || k === 'g') { go('graph'); gTimer = null; }
+        else if (k === 'c' || k === ',') { go('settings'); gTimer = null; }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -281,78 +357,195 @@ function App() {
     setAskOpen(true);
   }, []);
 
-  const onResync = useCallback(() => {
-    refreshDashboard();
-    pushConsole('info', 'sync', 'manual resync triggered');
-  }, [refreshDashboard, pushConsole]);
+  const onJumpToObservation = useCallback((id: number) => {
+    go('feed');
+    setHighlightedId(id);
+    setSelectedMemId(id);
+    window.setTimeout(() => setHighlightedId(null), 1500);
+  }, [go]);
 
   const onDoctor = useCallback(() => {
     pushConsole('info', 'doctor', 'doctor invoked from header');
   }, [pushConsole]);
 
-  const sseSubs = isConnected ? 1 : 0;
-  const totalsForSettings = dashboard
-    ? {
-        total: dashboard.totals.total,
-        activeSources: dashboard.totals.activeSources,
-        totalSources: dashboard.totals.totalSources
-      }
-    : null;
+  const totalMemories = dashboardData?.totals.total ?? graphObservations.length + graphSummaries.length + graphPrompts.length;
+
+  const todayCount = useMemo(() => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const startMs = startOfDay.getTime();
+    let count = 0;
+    for (const item of [...graphObservations, ...graphSummaries, ...graphPrompts]) {
+      if (item.created_at_epoch && item.created_at_epoch >= startMs) count++;
+    }
+    return count;
+  }, [graphObservations, graphSummaries, graphPrompts]);
+
+  const handleProjectChange = useCallback((project: string | null) => {
+    if (project == null) {
+      filterDispatch({ kind: 'replace', value: { ...filterState, projects: [] } });
+    } else {
+      filterDispatch({ kind: 'replace', value: { ...filterState, projects: [project] } });
+    }
+  }, [filterDispatch, filterState]);
+
+  const dayGroups = useMemo(() => {
+    type Item = { card: MemoryCardItem; epoch: number; raw: 'obs' | 'summary' | 'prompt' };
+    const items: Item[] = [
+      ...allObservations.map((o) => ({ card: obsToCard(o, freshIds.has(o.id)), epoch: o.created_at_epoch, raw: 'obs' as const })),
+      ...allSummaries.map((s) => ({ card: summaryToCard(s), epoch: s.created_at_epoch, raw: 'summary' as const })),
+      ...allPrompts.map((p) => ({ card: promptToCard(p), epoch: p.created_at_epoch, raw: 'prompt' as const }))
+    ];
+    items.sort((a, b) => b.epoch - a.epoch);
+    const groups = new Map<string, MemoryCardItem[]>();
+    items.forEach((it) => {
+      const day = dayBucket(it.epoch);
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day)!.push(it.card);
+    });
+    return Array.from(groups.entries()).map(([day, list]) => ({ day, list }));
+  }, [allObservations, allSummaries, allPrompts, freshIds]);
+
+  const allCards = useMemo(() => dayGroups.flatMap((g) => g.list), [dayGroups]);
+  const selectedCard = useMemo(
+    () => allCards.find((c) => c.id === selectedMemId) ?? allCards[0] ?? null,
+    [allCards, selectedMemId]
+  );
+  const selectedDay = useMemo(() => {
+    if (!selectedCard) return undefined;
+    for (const g of dayGroups) {
+      if (g.list.some((c) => c.id === selectedCard.id)) return g.day;
+    }
+    return undefined;
+  }, [dayGroups, selectedCard]);
+
+  const sseSubscribers = stats?.worker?.sseClients ?? 1;
 
   return (
     <div className="app">
-      <Rail
+      <Sidebar
+        route={route}
+        onRouteChange={go}
+        isConnected={isConnected}
+        totalMemories={totalMemories}
+        graphCount={graphObservations.length + graphSummaries.length}
+        activeSources={dashboardData?.totals.activeSources ?? sources.length}
+        totalSources={dashboardData?.totals.totalSources ?? sources.length}
+        projectCounts={projectCounts}
+        selectedProject={filterState.projects[0] ?? null}
+        onProjectChange={handleProjectChange}
+        workerPort={WORKER_PORT}
+        workerUptimeMs={stats?.worker?.uptime ? stats.worker.uptime * 1000 : null}
+        pendingJobs={queueDepth}
+        dbSizeBytes={stats?.database?.size ?? null}
+        appVersion={APP_VERSION}
+      />
+
+      <Header
         route={route}
         setRoute={go}
         isConnected={isConnected}
-        totalMemories={dashboard?.totals.total ?? 0}
-        activeSources={dashboard?.totals.activeSources ?? 0}
-        totalSources={dashboard?.totals.totalSources ?? 0}
-        projects={projects}
-        projectCounts={projectCounts}
-        workerVersion={workerVersion}
-      />
-
-      <AppHeader
-        isConnected={isConnected}
         isProcessing={isProcessing}
-        consoleOpen={consoleOpen}
-        onTogglePalette={() => setPaletteOpen(true)}
-        onToggleConsole={() => setConsoleOpen(c => !c)}
-        onResync={onResync}
-        onDoctor={onDoctor}
+        queueDepth={queueDepth}
+        scheme={scheme}
+        onSchemeChange={setScheme}
+        onOpenPalette={() => setPaletteOpen(true)}
+        onOpenHelp={() => setHelpOpen(true)}
+        onToggleConsole={() => setLogsModalOpen(v => !v)}
+        consoleOpen={logsModalOpen}
+        searchQuery={filterState.query}
+        onSearchChange={(q) => filterDispatch({ kind: 'setQuery', value: q })}
+        workerPort={WORKER_PORT}
       />
 
       <main className="main">
-        <OfflineBanner
-          visible={!isConnected}
-          onRetry={() => window.location.reload()}
-          onOpenConsole={() => setConsoleOpen(true)}
-        />
-
         {route === 'feed' && (
-          <FeedRoute
-            items={feedItems}
-            freshIds={freshIds}
-            isConnected={isConnected}
-            dashboard={dashboard}
-            onLoadMore={handleLoadMore}
-            hasMore={
-              pagination.observations.hasMore ||
-              pagination.summaries.hasMore ||
-              pagination.prompts.hasMore
-            }
-            isLoading={
-              pagination.observations.isLoading ||
-              pagination.summaries.isLoading ||
-              pagination.prompts.isLoading
-            }
-            highlightedId={highlightedId}
-            onJump={(id: number) => {
-              setAskInitial(`obs#${id}`);
-              setAskOpen(true);
-            }}
-          />
+          <div className="route" data-screen-label="01 Feed">
+            <div className="route-head">
+              <h1 className="route-title">Feed</h1>
+              <span className="route-sub mono">Audit trail of what AiMemory learned · live</span>
+            </div>
+
+            <div className="dash-grid">
+              <MemoryEconomy
+                sourceRows={dashboardData?.sources ?? []}
+                windowDays={30}
+                scope="GLOBAL"
+                liveBeacon
+              />
+              <RightRail
+                totalMemories={totalMemories}
+                todayCount={todayCount}
+                projectCount={projectCounts.length}
+                totalsSpark={totalsSpark}
+                activeSources={dashboardData?.totals.activeSources ?? sources.length}
+                totalSources={dashboardData?.totals.totalSources ?? sources.length}
+                sourceRows={dashboardData?.sources ?? []}
+                lastSeenMs={dashboardData?.totals.lastSeenMs ?? null}
+                isConnected={isConnected}
+                workerPort={WORKER_PORT}
+              />
+            </div>
+
+            <FilterBar
+              state={filterState}
+              dispatch={filterDispatch}
+              sourceTotals={sourceTotals}
+              selectedProject={filterState.projects[0] ?? null}
+            />
+
+            <div className="feed-layout">
+              <div className="feed-stream">
+                {dayGroups.map(({ day, list }) => (
+                  <React.Fragment key={day}>
+                    <div className="daygroup-head">
+                      <span>{day}</span>
+                      <span className="line" />
+                      <span>
+                        {list.length} {list.length === 1 ? 'memory' : 'memories'}
+                        {list.some((m) => m.tokensSaved) && (
+                          <> · {list.reduce((s, m) => s + m.tokensSaved, 0).toLocaleString('en-US')} tok saved</>
+                        )}
+                      </span>
+                    </div>
+                    {list.map((card) => (
+                      <MemoryCard
+                        key={card.id}
+                        item={card}
+                        selected={selectedCard?.id === card.id || highlightedId === card.id}
+                        onSelect={setSelectedMemId}
+                      />
+                    ))}
+                  </React.Fragment>
+                ))}
+                {dayGroups.length === 0 && (
+                  <div style={{ padding: 'var(--sp-9) var(--sp-5)', textAlign: 'center', color: 'var(--ink-2)' }}>
+                    <div style={{ fontSize: 14, marginBottom: 8 }}>No memories match your filters</div>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => filterDispatch({ kind: 'clearAll' })}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                )}
+              </div>
+              <Inspector
+                memory={selectedCard}
+                day={selectedDay}
+                tokensCost={4820}
+                tokensReused={12300}
+                onCite={() => {
+                  if (selectedCard) {
+                    setAskInitial(`obs#${selectedCard.id}`);
+                    setAskOpen(true);
+                  }
+                }}
+                onShowInGraph={() => go('graph')}
+              />
+            </div>
+          </div>
         )}
 
         {route === 'graph' && (
@@ -390,15 +583,17 @@ function App() {
       </main>
 
       <StatusBar
+        workerPort={WORKER_PORT}
         isConnected={isConnected}
-        observationCount={observations.length + paginatedObs.length}
-        sseSubs={sseSubs}
-        consoleOpen={consoleOpen}
-        onToggleConsole={() => setConsoleOpen(c => !c)}
+        rowCount={totalMemories}
+        chromaIndexed={isConnected && (dashboardData?.totals.totalSources ?? 0) > 0}
+        sseSubscribers={sseSubscribers}
+        consoleOpen={logsModalOpen}
+        onOpenConsole={() => setLogsModalOpen(v => !v)}
       />
 
-      <CommandPaletteV2
-        open={paletteOpen}
+      <CommandPalette
+        isOpen={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onNavigate={r => go(r)}
         onJump={onJump}
@@ -431,6 +626,8 @@ function App() {
       />
 
       <KeyboardHelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <LogsDrawer isOpen={logsModalOpen} onClose={() => setLogsModalOpen(false)} />
     </div>
   );
 }
