@@ -2,6 +2,7 @@ import React from 'react';
 import type { NeonScheme } from '../hooks/useTheme';
 import { useSpinningFavicon } from '../hooks/useSpinningFavicon';
 import type { Route } from '../hooks/useRoute';
+import { WindowControls } from './WindowControls';
 
 interface HeaderProps {
   route: Route;
@@ -66,7 +67,7 @@ export function Header({
         : 'offline';
 
   return (
-    <header className="hdr">
+    <header className="hdr" data-tauri-drag-region>
       <button type="button" className="hdr-search" onClick={onOpenPalette}>
         <span className="hdr-search-icon">{ICONS.search}</span>
         <span className="hdr-search-text">Ask, search memory, or run a command…</span>
@@ -95,6 +96,7 @@ export function Header({
         <span className="src" style={{ fontSize: 12, color: statusColor }}>
           {statusText}
         </span>
+        <WindowControls variant="header" />
       </div>
     </header>
   );

@@ -22,6 +22,7 @@ import { useRoute } from './hooks/useRoute';
 import { useFilterState } from './hooks/useFilterState';
 import { useSourcesDashboard } from './hooks/useSourcesDashboard';
 import { useStats } from './hooks/useStats';
+import { tauri, useTauri } from './hooks/useTauri';
 import { Observation, Summary, UserPrompt } from './types';
 import { mergeAndDeduplicateByProject } from './utils/data';
 import { matchesFilter } from './state/filterReducer';
@@ -151,6 +152,7 @@ export function App() {
   const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
   const prevLiveIds = useRef<Set<number>>(new Set());
 
+  useTauri();
   const { route, go } = useRoute();
   const { state: filterState, dispatch: filterDispatch } = useFilterState();
   const { observations, summaries, prompts, sources, isProcessing, queueDepth, isConnected } = useSSE();
@@ -323,6 +325,34 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); if (gTimer) window.clearTimeout(gTimer); };
   }, [go]);
+
+  // Tauri tray + global-shortcut bridge: lets ⌘⇧K / ⌘⇧J / tray menu open the
+  // palette and Ask panel even when the window isn't focused.
+  useEffect(() => {
+    let unlistenPalette: (() => void) | null = null;
+    let unlistenAsk: (() => void) | null = null;
+    let cancelled = false;
+    tauri
+      .listen<string>('claude-mem://palette', () => setPaletteOpen(true))
+      .then((u) => {
+        if (cancelled) u();
+        else unlistenPalette = u;
+      });
+    tauri
+      .listen<string>('claude-mem://ask', () => {
+        setAskInitial(undefined);
+        setAskOpen(true);
+      })
+      .then((u) => {
+        if (cancelled) u();
+        else unlistenAsk = u;
+      });
+    return () => {
+      cancelled = true;
+      unlistenPalette?.();
+      unlistenAsk?.();
+    };
+  }, []);
 
   const onAskSubmit = useCallback((question: string) => {
     setAskInitial(question);
