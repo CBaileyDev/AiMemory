@@ -6818,6 +6818,36 @@ html[data-tauri='true'] .app {
   animation: claudeMemFadeIn 220ms var(--ease-out) both;
 }
 
+/* Graphify-style affordances hint at the bottom-center of the stage */
+.graph-hint {
+  position: absolute;
+  bottom: var(--sp-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(11, 15, 20, 0.6);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+
+.graph-hint .kbd {
+  margin-left: 4px;
+}
+
+.graph-hint__sep { color: var(--ink-4); }
+.graph-hint .kbd { margin-left: 0; }
+
 </style>
 </head>
 <body>
