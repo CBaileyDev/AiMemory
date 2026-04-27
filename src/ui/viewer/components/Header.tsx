@@ -93,7 +93,16 @@ export function Header({
           {ICONS.logs} Console
         </button>
         <span style={{ width: 1, height: 20, background: 'var(--line-2)', margin: '0 4px' }} />
-        <span className="src" style={{ fontSize: 12, color: statusColor }}>
+        <span
+          className="src"
+          aria-live="polite"
+          style={{ fontSize: 12, color: statusColor, fontFamily: 'var(--font-mono)' }}
+        >
+          <span
+            className={`dot ${status === 'ok' ? 'ok live' : status === 'warn' ? 'warn' : 'err'}`}
+            style={{ color: statusColor }}
+            aria-hidden="true"
+          />
           {statusText}
         </span>
         <WindowControls variant="header" />

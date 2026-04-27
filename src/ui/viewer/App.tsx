@@ -473,7 +473,12 @@ export function App() {
           <div className="route" data-screen-label="01 Feed">
             <div className="route-head">
               <h1 className="route-title">Feed</h1>
-              <span className="route-sub mono">Audit trail of what AiMemory learned · live</span>
+              <span className="route-sub mono">
+                Audit trail of what AiMemory learned ·{' '}
+                <span style={{ color: isConnected ? 'var(--ok)' : 'var(--err)' }}>
+                  {isConnected ? 'live' : 'offline'}
+                </span>
+              </span>
             </div>
 
             <div className="dash-grid">

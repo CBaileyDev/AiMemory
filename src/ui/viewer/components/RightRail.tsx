@@ -105,6 +105,11 @@ export function RightRail({
   }, [sourceRows]);
 
   const offlineCount = Math.max(0, totalSources - activeSources);
+  const staleCount = useMemo(() => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    return sourceRows.filter((r) => r.lastSeenMs != null && now - r.lastSeenMs > dayMs).length;
+  }, [sourceRows]);
   const lastSyncStr = relativeShort(lastSeenMs);
 
   const syncPct = isConnected ? 0.82 : 0.12;
@@ -138,9 +143,12 @@ export function RightRail({
             {activeSources}<span className="muted" style={{ fontSize: 18 }}>/{totalSources}</span>
           </div>
           <div className="kpi-meta">
-            {offlineCount > 0
-              ? `${offlineCount} ${offlineCount === 1 ? 'offline' : 'offline'}`
-              : 'all healthy'}
+            {(() => {
+              const parts: string[] = [];
+              if (staleCount > 0) parts.push(`${staleCount} stale`);
+              if (offlineCount > 0) parts.push(`${offlineCount} not installed`);
+              return parts.length > 0 ? parts.join(' · ') : 'all healthy';
+            })()}
           </div>
         </div>
         <div className="kpi-bars" aria-hidden="true">

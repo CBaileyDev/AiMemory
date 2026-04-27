@@ -166,15 +166,13 @@ export function MemoryCard({ item, selected, onSelect }: MemoryCardProps) {
       </div>
       <div className="mem-side">
         <span className="mem-time mono">{item.time}</span>
-        {item.tokensSaved > 0 ? (
+        {item.tokensSaved > 0 && (
           <span
             className="mem-tokens reused"
             title="Tokens saved by recalling instead of reprompting"
           >
             {ICON_BOLT} {item.tokensSaved.toLocaleString('en-US')} saved
           </span>
-        ) : (
-          <span className="mem-time">new entry</span>
         )}
       </div>
     </div>

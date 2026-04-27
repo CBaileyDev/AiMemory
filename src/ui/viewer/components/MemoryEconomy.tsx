@@ -148,17 +148,28 @@ export function MemoryEconomy({
     const totalRaw = entries.reduce((s, e) => s + e.raw, 0);
     const avgCtx = entries.length ? Math.round(totalTokens / Math.max(1, entries.length * 12)) : 0;
     const wallClockSec = (totalTokens / 1000) * SECONDS_PER_KTOK;
-    const withPercent = entries.map((e) => ({
-      ...e,
-      percent: totalTokens > 0 ? (e.tokens / totalTokens) * 100 : 0
-    }));
+    const withPercent = entries
+      .map((e) => ({
+        ...e,
+        percent: totalTokens > 0 ? (e.tokens / totalTokens) * 100 : 0
+      }))
+      .filter((e) => e.percent >= 1);
+
+    const weekTokens = sourceRows.reduce((sum, row) => {
+      const arr = row.sevenDay ?? [];
+      const last7 = arr.slice(-7).reduce((s, v) => s + v, 0);
+      return sum + last7 * TOKENS_PER_MEMORY * AVG_REUSE;
+    }, 0);
+    const weekDollars = (weekTokens / 1000) * FALLBACK_RATE;
+
     return {
       totalTokens,
       totalDollars,
       totalRaw,
       avgCtx,
       wallClockSec,
-      sources: withPercent
+      sources: withPercent,
+      weekDollars
     };
   }, [sourceRows]);
 
@@ -193,7 +204,7 @@ export function MemoryEconomy({
       ? h - pad - ((trendValues[trendValues.length - 1] - min) / span) * (h - pad * 2)
       : h - pad;
 
-  const wkDelta = Math.max(1, Math.round(dollars * 0.18));
+  const wkDelta = Math.max(1, Math.round(model.weekDollars));
 
   return (
     <div className="savings">
