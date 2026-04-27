@@ -79,22 +79,19 @@ interface SimNode {
   kind: NodeKind;
   label: string;
   color: string;
-  cssVar: string;
   parent?: string;
-  /** Visual radius in svg units */
   radius: number;
-  /** Soft "mass" for charge force */
   mass: number;
   count: number;
-  // Physics state
+  type?: string;
+  // Physics
   x: number;
   y: number;
   vx: number;
   vy: number;
-  /** Pinned by user drag */
   fx?: number | null;
   fy?: number | null;
-  // Cluster-specific aggregates
+  // Cluster aggregates
   projects?: Set<string>;
   concepts?: string[];
   typeMix?: Map<string, number>;
@@ -103,7 +100,9 @@ interface SimNode {
 interface SimLink {
   source: string;
   target: string;
-  strength: number; // 0..1
+  strength: number;
+  /** Target rest length */
+  rest: number;
 }
 
 function normalizeType(t?: string | null): string {
@@ -126,13 +125,182 @@ const W = 1600;
 const H = 900;
 const CENTER = { x: W / 2, y: H / 2 };
 
+const ALPHA_DECAY = 0.985;
+const ALPHA_MIN = 0.01;
+const ALPHA_RESTART = 0.7;
+const PRE_SETTLE_TICKS = 220;
+
+function tickSim(
+  nodes: SimNode[],
+  links: SimLink[],
+  nodeMap: Map<string, SimNode>,
+  alpha: number
+): void {
+  // Charge (between same-kind only when far; skip cross-cluster leaf↔leaf)
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < nodes.length; j++) {
+      const b = nodes[j];
+      if (a.kind === 'leaf' && b.kind === 'leaf' && a.parent !== b.parent) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 16) d2 = 16;
+      const dist = Math.sqrt(d2);
+      const charge =
+        a.kind === 'cluster' && b.kind === 'cluster'
+          ? -16000 * a.mass * b.mass
+          : a.kind === 'leaf' && b.kind === 'leaf'
+            ? -90
+            : -340 * b.mass;
+      const f = (charge / d2) * alpha;
+      const fx = (dx / dist) * f;
+      const fy = (dy / dist) * f;
+      if (a.fx == null) {
+        a.vx -= fx;
+        a.vy -= fy;
+      }
+      if (b.fx == null) {
+        b.vx += fx;
+        b.vy += fy;
+      }
+    }
+  }
+  // Spring links
+  for (const l of links) {
+    const a = nodeMap.get(l.source);
+    const b = nodeMap.get(l.target);
+    if (!a || !b) continue;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const k = (b.kind === 'leaf' || a.kind === 'leaf') ? 0.13 : 0.045;
+    const force = (dist - l.rest) * k * l.strength * alpha;
+    const fx = (dx / dist) * force;
+    const fy = (dy / dist) * force;
+    if (a.fx == null) {
+      a.vx += fx;
+      a.vy += fy;
+    }
+    if (b.fx == null) {
+      b.vx -= fx;
+      b.vy -= fy;
+    }
+  }
+  // Center gravity (very gentle for clusters)
+  for (const n of nodes) {
+    if (n.fx != null) continue;
+    const k = n.kind === 'cluster' ? 0.0035 : 0.006;
+    n.vx += (CENTER.x - n.x) * k * alpha;
+    n.vy += (CENTER.y - n.y) * k * alpha;
+  }
+  // Integrate
+  const damp = 0.7;
+  for (const n of nodes) {
+    if (n.fx != null) {
+      n.x = n.fx;
+      n.y = n.fy ?? n.y;
+      n.vx = 0;
+      n.vy = 0;
+      continue;
+    }
+    n.vx *= damp;
+    n.vy *= damp;
+    const sp = Math.hypot(n.vx, n.vy);
+    if (sp > 8) {
+      n.vx = (n.vx / sp) * 8;
+      n.vy = (n.vy / sp) * 8;
+    }
+    n.x += n.vx;
+    n.y += n.vy;
+  }
+  // Hard collision pass (cluster–cluster) — a few iterations for stability
+  const clusters = nodes.filter((n) => n.kind === 'cluster');
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const a = clusters[i];
+        const b = clusters[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const minDist = a.radius + b.radius + 130;
+        if (dist < minDist) {
+          const overlap = (minDist - dist) / 2;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          if (a.fx == null) {
+            a.x -= ux * overlap;
+            a.y -= uy * overlap;
+          }
+          if (b.fx == null) {
+            b.x += ux * overlap;
+            b.y += uy * overlap;
+          }
+        }
+      }
+    }
+  }
+  // Soft collision among leaves of the same cluster
+  const byParent = new Map<string, SimNode[]>();
+  for (const n of nodes) {
+    if (n.kind !== 'leaf' || !n.parent) continue;
+    if (!byParent.has(n.parent)) byParent.set(n.parent, []);
+    byParent.get(n.parent)!.push(n);
+  }
+  byParent.forEach((siblings) => {
+    for (let i = 0; i < siblings.length; i++) {
+      for (let j = i + 1; j < siblings.length; j++) {
+        const a = siblings[i];
+        const b = siblings[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const minDist = a.radius + b.radius + 6;
+        if (dist < minDist) {
+          const overlap = (minDist - dist) / 2;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          if (a.fx == null) {
+            a.x -= ux * overlap;
+            a.y -= uy * overlap;
+          }
+          if (b.fx == null) {
+            b.x += ux * overlap;
+            b.y += uy * overlap;
+          }
+        }
+      }
+    }
+  });
+  // Bound to canvas with soft margin
+  for (const n of nodes) {
+    if (n.x < 80) {
+      n.x = 80;
+      n.vx *= -0.4;
+    }
+    if (n.x > W - 80) {
+      n.x = W - 80;
+      n.vx *= -0.4;
+    }
+    if (n.y < 80) {
+      n.y = 80;
+      n.vy *= -0.4;
+    }
+    if (n.y > H - 80) {
+      n.y = H - 80;
+      n.vy *= -0.4;
+    }
+  }
+}
+
 export function GraphPage({ observations, summaries, prompts }: GraphPageProps) {
   const [zoom, setZoom] = useState<0 | 1 | 2>(1);
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
 
-  // ---------- Build nodes & links ----------
+  // Derive nodes and links from data
   const { nodes, links, clusterIndex } = useMemo(() => {
     const bySource = new Map<string, SimNode>();
     const projectsBySource = new Map<string, Set<string>>();
@@ -153,12 +321,11 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           kind: 'cluster',
           label: SOURCE_LABELS[source] ?? source,
           color: SOURCE_COLORS[source] ?? 'var(--ink-2)',
-          cssVar: SOURCE_COLORS[source] ?? 'var(--ink-2)',
           radius: 28,
           mass: 1,
           count: 0,
-          x: CENTER.x + (Math.random() - 0.5) * 200,
-          y: CENTER.y + (Math.random() - 0.5) * 200,
+          x: CENTER.x,
+          y: CENTER.y,
           vx: 0,
           vy: 0
         };
@@ -194,13 +361,17 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
     const clusters = Array.from(bySource.values());
     clusters.sort((a, b) => b.count - a.count);
     const max = Math.max(...clusters.map((c) => c.count), 1);
-    clusters.forEach((c, i) => {
-      c.radius = 22 + Math.min(56, (c.count / max) * 50);
-      c.mass = 1.4 + (c.count / max) * 1.2;
-      const a = (i / clusters.length) * Math.PI * 2;
-      const r = 220;
-      c.x = CENTER.x + Math.cos(a) * r;
-      c.y = CENTER.y + Math.sin(a) * r;
+    const top = clusters.slice(0, 12);
+
+    // Initial radial layout — evenly spaced around circle so the simulation
+    // doesn't have to do much work to find a clean layout.
+    top.forEach((c, i) => {
+      c.radius = 28 + Math.min(56, (c.count / max) * 50);
+      c.mass = 1.4 + (c.count / max) * 1.4;
+      const angle = (i / top.length) * Math.PI * 2 - Math.PI / 2;
+      const r = top.length === 1 ? 0 : 280;
+      c.x = CENTER.x + Math.cos(angle) * r;
+      c.y = CENTER.y + Math.sin(angle) * r;
       c.projects = projectsBySource.get(c.id);
       c.concepts = Array.from(conceptsBySource.get(c.id)!.entries())
         .sort((a, b) => b[1] - a[1])
@@ -209,11 +380,10 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
       c.typeMix = typeMixBySource.get(c.id);
     });
 
-    const top = clusters.slice(0, 12);
     const allNodes: SimNode[] = [...top];
     const allLinks: SimLink[] = [];
 
-    // Project-shared edges between clusters: if two clusters share a project, link them
+    // Cluster–cluster edges based on shared projects + concepts
     for (let i = 0; i < top.length; i++) {
       for (let j = i + 1; j < top.length; j++) {
         const a = top[i];
@@ -225,44 +395,50 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           b.concepts?.includes(c)
         ).length;
         const total = sharedProjects * 2 + sharedConcepts;
-        if (total > 0) {
-          allLinks.push({ source: a.id, target: b.id, strength: Math.min(1, total / 5) });
+        if (total >= 1) {
+          allLinks.push({
+            source: a.id,
+            target: b.id,
+            strength: Math.min(1, total / 6),
+            rest: 320
+          });
         }
       }
     }
-    // Keep at least one chain link to the largest cluster so the graph doesn't fly apart.
+
+    // Add at least one link to keep graph from drifting apart
     if (top.length > 1 && allLinks.length === 0) {
       for (let i = 1; i < top.length; i++) {
-        allLinks.push({ source: top[0].id, target: top[i].id, strength: 0.4 });
+        allLinks.push({
+          source: top[0].id,
+          target: top[i].id,
+          strength: 0.4,
+          rest: 360
+        });
       }
     }
 
-    // Sub-leaves for zoom level >= 1: a few sample memories per cluster
+    // Leaves at zoom >= 1 — sample, capped per-cluster for clarity
     if (zoom >= 1) {
-      // Build a sample of recent memories per cluster
-      const recent: Array<{ source: string; id: number; type: string; title: string; project: string }>
-        = [];
-      observations.slice(0, 240).forEach((o) =>
+      const recent: Array<{ source: string; id: number; type: string; title: string }> = [];
+      observations.slice(0, 200).forEach((o) =>
         recent.push({
           source: (o.platform_source || 'claude').toLowerCase(),
           id: o.id,
           type: normalizeType(o.type),
-          title: o.title ?? 'observation',
-          project: o.project ?? ''
+          title: o.title ?? 'observation'
         })
       );
-      summaries.slice(0, 80).forEach((s) =>
+      summaries.slice(0, 60).forEach((s) =>
         recent.push({
           source: (s.platform_source || 'claude').toLowerCase(),
           id: s.id + 100000,
-          type: normalizeType('completed'),
-          title: s.request ?? 'summary',
-          project: s.project ?? ''
+          type: 'completed',
+          title: s.request ?? 'summary'
         })
       );
 
-      // Cap leaves per cluster
-      const perCluster = zoom === 2 ? 18 : 8;
+      const perCluster = zoom === 2 ? 12 : 6;
       const counts = new Map<string, number>();
       for (const m of recent) {
         const c = bySource.get(m.source);
@@ -270,16 +446,19 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         const n = counts.get(m.source) ?? 0;
         if (n >= perCluster) continue;
         counts.set(m.source, n + 1);
-        const angle = Math.random() * Math.PI * 2;
-        const r = c.radius + 60 + Math.random() * 60;
+        // Place leaf on a ring around its parent at a deterministic angle
+        const slotsTotal = perCluster;
+        const slot = n;
+        const angle = (slot / slotsTotal) * Math.PI * 2;
+        const r = c.radius + 56;
         const node: SimNode = {
           id: `${m.source}:${m.id}`,
           kind: 'leaf',
           parent: m.source,
           label: m.title.slice(0, 60),
           color: TYPE_COLORS[m.type] ?? 'var(--ink-2)',
-          cssVar: TYPE_COLORS[m.type] ?? 'var(--ink-2)',
-          radius: zoom === 2 ? 6 : 4.5,
+          type: m.type,
+          radius: zoom === 2 ? 6 : 5,
           mass: 0.18,
           count: 1,
           x: c.x + Math.cos(angle) * r,
@@ -288,52 +467,56 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           vy: 0
         };
         allNodes.push(node);
-        allLinks.push({ source: m.source, target: node.id, strength: 0.65 });
+        allLinks.push({
+          source: m.source,
+          target: node.id,
+          strength: 1,
+          rest: c.radius + 56
+        });
       }
     }
 
-    const clusterIdx = new Map<string, SimNode>();
-    top.forEach((c) => clusterIdx.set(c.id, c));
+    const idx = new Map<string, SimNode>();
+    top.forEach((c) => idx.set(c.id, c));
 
-    return { nodes: allNodes, links: allLinks, clusterIndex: clusterIdx };
+    return { nodes: allNodes, links: allLinks, clusterIndex: idx };
   }, [observations, summaries, prompts, zoom]);
 
-  // ---------- Force simulation ----------
-  // Keep mutable refs so we don't reset positions on every state change.
+  // ---------- Simulation refs ----------
   const nodesRef = useRef<Map<string, SimNode>>(new Map());
   const draftRef = useRef<SimNode[]>([]);
   const linksRef = useRef<SimLink[]>([]);
+  const alphaRef = useRef<number>(1);
   const dragRef = useRef<{ id: string | null; offX: number; offY: number }>({
     id: null,
     offX: 0,
     offY: 0
   });
-  const panRef = useRef<{ active: boolean; px: number; py: number; tx: number; ty: number }>({
-    active: false,
-    px: 0,
-    py: 0,
-    tx: 0,
-    ty: 0
-  });
+  const panRef = useRef<{
+    active: boolean;
+    px: number;
+    py: number;
+    tx: number;
+    ty: number;
+  }>({ active: false, px: 0, py: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [, forceTick] = useState(0);
 
-  // Sync new nodes/links into the live simulation, preserving existing positions.
+  // Sync nodes/links into the live simulation, preserving existing positions
   useEffect(() => {
     const live = nodesRef.current;
     const next = new Map<string, SimNode>();
     nodes.forEach((n) => {
       const existing = live.get(n.id);
       if (existing) {
-        // Preserve position + velocity, refresh visual + aggregate fields.
         existing.label = n.label;
         existing.color = n.color;
-        existing.cssVar = n.cssVar;
         existing.radius = n.radius;
         existing.mass = n.mass;
         existing.count = n.count;
         existing.kind = n.kind;
         existing.parent = n.parent;
+        existing.type = n.type;
         existing.projects = n.projects;
         existing.concepts = n.concepts;
         existing.typeMix = n.typeMix;
@@ -345,196 +528,72 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
     nodesRef.current = next;
     draftRef.current = Array.from(next.values());
     linksRef.current = links;
+    // Pre-settle the simulation so initial render is stable
+    let alpha = 1;
+    for (let i = 0; i < PRE_SETTLE_TICKS; i++) {
+      tickSim(draftRef.current, linksRef.current, nodesRef.current, alpha);
+      alpha *= ALPHA_DECAY;
+      if (alpha < ALPHA_MIN) break;
+    }
+    alphaRef.current = 0;
     forceTick((v) => v + 1);
   }, [nodes, links]);
 
-  // Animation loop: integrate forces and request redraws.
+  // Animation loop — only ticks while alpha is above min, or when something is being dragged
   useEffect(() => {
     let raf = 0;
-    const integrate = () => {
+    const loop = () => {
       const arr = draftRef.current;
       const links = linksRef.current;
-      if (!arr.length) {
-        raf = requestAnimationFrame(integrate);
-        return;
+      const dragging = dragRef.current.id != null;
+      const needsWork = alphaRef.current > ALPHA_MIN || dragging;
+      if (needsWork && arr.length) {
+        const alpha = Math.max(alphaRef.current, dragging ? 0.4 : 0);
+        tickSim(arr, links, nodesRef.current, alpha);
+        if (!dragging) alphaRef.current *= ALPHA_DECAY;
+        forceTick((v) => (v + 1) % 10000);
       }
-      // Charge (Coulomb-like) repulsion — only between cluster nodes, plus mild repulsion among leaves of the same cluster.
-      for (let i = 0; i < arr.length; i++) {
-        const a = arr[i];
-        if (a.fx != null && a.fy != null) continue;
-        for (let j = i + 1; j < arr.length; j++) {
-          const b = arr[j];
-          // Skip cross-cluster leaf↔leaf forces (would explode the sim).
-          if (a.kind === 'leaf' && b.kind === 'leaf' && a.parent !== b.parent) continue;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          let d2 = dx * dx + dy * dy;
-          if (d2 < 9) d2 = 9;
-          const dist = Math.sqrt(d2);
-          // Charge magnitude scales with mass.
-          const charge =
-            a.kind === 'cluster' && b.kind === 'cluster'
-              ? -14000 * a.mass * b.mass
-              : a.kind === 'leaf' && b.kind === 'leaf'
-                ? -120
-                : -360 * b.mass;
-          const f = charge / d2;
-          const fx = (dx / dist) * f;
-          const fy = (dy / dist) * f;
-          a.vx -= fx;
-          a.vy -= fy;
-          if (b.fx == null || b.fy == null) {
-            b.vx += fx;
-            b.vy += fy;
-          }
-
-          // Hard collision constraint between cluster nodes — keep their
-          // bounding circles from overlapping.
-          if (a.kind === 'cluster' && b.kind === 'cluster') {
-            const minDist = a.radius + b.radius + 80;
-            if (dist < minDist) {
-              const overlap = (minDist - dist) / 2;
-              const ox = (dx / dist) * overlap;
-              const oy = (dy / dist) * overlap;
-              if (a.fx == null) {
-                a.x -= ox;
-                a.y -= oy;
-              }
-              if (b.fx == null) {
-                b.x += ox;
-                b.y += oy;
-              }
-            }
-          }
-        }
-      }
-      // Spring (link) attraction
-      const map = nodesRef.current;
-      for (const l of links) {
-        const a = map.get(l.source);
-        const b = map.get(l.target);
-        if (!a || !b) continue;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const target =
-          b.kind === 'leaf' || a.kind === 'leaf'
-            ? (a.radius + b.radius) + 36
-            : 220;
-        const k = b.kind === 'leaf' || a.kind === 'leaf' ? 0.06 : 0.025;
-        const force = (dist - target) * k * l.strength;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        if (a.fx == null || a.fy == null) {
-          a.vx += fx;
-          a.vy += fy;
-        }
-        if (b.fx == null || b.fy == null) {
-          b.vx -= fx;
-          b.vy -= fy;
-        }
-      }
-      // Center gravity
-      for (const n of arr) {
-        if (n.fx != null && n.fy != null) continue;
-        const cx = CENTER.x;
-        const cy = CENTER.y;
-        const k = n.kind === 'cluster' ? 0.0035 : 0.005;
-        n.vx += (cx - n.x) * k;
-        n.vy += (cy - n.y) * k;
-      }
-      // Integrate + damping
-      const damp = 0.86;
-      for (const n of arr) {
-        if (n.fx != null && n.fy != null) {
-          n.x = n.fx;
-          n.y = n.fy;
-          n.vx = 0;
-          n.vy = 0;
-          continue;
-        }
-        n.vx *= damp;
-        n.vy *= damp;
-        // Clamp velocity
-        const sp = Math.hypot(n.vx, n.vy);
-        if (sp > 12) {
-          n.vx = (n.vx / sp) * 12;
-          n.vy = (n.vy / sp) * 12;
-        }
-        n.x += n.vx;
-        n.y += n.vy;
-      }
-
-      // Hard collision pass (post-integration) — keep cluster bubbles apart.
-      const clusters = arr.filter((n) => n.kind === 'cluster');
-      for (let i = 0; i < clusters.length; i++) {
-        for (let j = i + 1; j < clusters.length; j++) {
-          const a = clusters[i];
-          const b = clusters[j];
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
-          const minDist = a.radius + b.radius + 90;
-          if (dist < minDist) {
-            const overlap = (minDist - dist) / 2;
-            const ux = dx / dist;
-            const uy = dy / dist;
-            if (a.fx == null) {
-              a.x -= ux * overlap;
-              a.y -= uy * overlap;
-            }
-            if (b.fx == null) {
-              b.x += ux * overlap;
-              b.y += uy * overlap;
-            }
-          }
-        }
-      }
-      forceTick((v) => (v + 1) % 10000);
-      raf = requestAnimationFrame(integrate);
+      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(integrate);
+    raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // ---------- Pan / Zoom ----------
+  const reheat = useCallback(() => {
+    alphaRef.current = ALPHA_RESTART;
+  }, []);
+
+  // ---------- Pan/Zoom helpers ----------
   const screenToWorld = useCallback(
     (sx: number, sy: number) => {
       const svg = svgRef.current;
       if (!svg) return { x: sx, y: sy };
       const rect = svg.getBoundingClientRect();
-      // Map screen → svg viewBox coords
       const vx = ((sx - rect.left) / rect.width) * W;
       const vy = ((sy - rect.top) / rect.height) * H;
-      // Apply inverse view transform
       return { x: (vx - view.tx) / view.k, y: (vy - view.ty) / view.k };
     },
     [view]
   );
 
-  const onWheel = useCallback(
-    (e: React.WheelEvent<SVGSVGElement>) => {
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      setView((v) => {
-        const newK = Math.max(0.4, Math.min(4, v.k * factor));
-        const svg = svgRef.current;
-        if (!svg) return v;
-        const rect = svg.getBoundingClientRect();
-        const vx = ((e.clientX - rect.left) / rect.width) * W;
-        const vy = ((e.clientY - rect.top) / rect.height) * H;
-        // keep cursor anchored
-        const nx = vx - (vx - v.tx) * (newK / v.k);
-        const ny = vy - (vy - v.ty) * (newK / v.k);
-        return { k: newK, tx: nx, ty: ny };
-      });
-    },
-    []
-  );
+  const onWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    setView((v) => {
+      const newK = Math.max(0.4, Math.min(4, v.k * factor));
+      const svg = svgRef.current;
+      if (!svg) return v;
+      const rect = svg.getBoundingClientRect();
+      const vx = ((e.clientX - rect.left) / rect.width) * W;
+      const vy = ((e.clientY - rect.top) / rect.height) * H;
+      const nx = vx - (vx - v.tx) * (newK / v.k);
+      const ny = vy - (vy - v.ty) * (newK / v.k);
+      return { k: newK, tx: nx, ty: ny };
+    });
+  }, []);
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
-      // Check if clicked on a node (handled by node listeners) — otherwise pan
       const tgt = e.target as SVGElement;
       if (tgt.closest('[data-node-id]')) return;
       panRef.current = {
@@ -548,10 +607,8 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
     [view]
   );
 
-  // Global mousemove / mouseup so dragging can extend off-svg
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      // node drag
       if (dragRef.current.id) {
         const w = screenToWorld(e.clientX, e.clientY);
         const node = nodesRef.current.get(dragRef.current.id);
@@ -561,14 +618,12 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         }
         return;
       }
-      // pan
       if (panRef.current.active) {
         const svg = svgRef.current;
         if (!svg) return;
         const rect = svg.getBoundingClientRect();
         const dxScreen = e.clientX - panRef.current.px;
         const dyScreen = e.clientY - panRef.current.py;
-        // Convert pixel delta to viewBox delta
         const dxView = (dxScreen / rect.width) * W;
         const dyView = (dyScreen / rect.height) * H;
         setView((v) => ({
@@ -586,6 +641,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           node.fy = null;
         }
         dragRef.current = { id: null, offX: 0, offY: 0 };
+        reheat();
       }
       panRef.current.active = false;
     };
@@ -595,7 +651,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [screenToWorld]);
+  }, [screenToWorld, reheat]);
 
   const onNodeMouseDown = useCallback(
     (id: string, e: React.MouseEvent) => {
@@ -615,7 +671,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
     setView({ k: 1, tx: 0, ty: 0 });
   }, []);
 
-  // ---------- Selection / highlight ----------
+  // ---------- Selection + highlight ----------
   const highlightNode = hovered ?? selected;
   const connectedSet = useMemo(() => {
     if (!highlightNode) return null;
@@ -624,16 +680,25 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
       if (l.source === highlightNode) set.add(l.target);
       if (l.target === highlightNode) set.add(l.source);
     }
+    // If hovering a leaf, also include its parent and siblings.
+    const node = nodesRef.current.get(highlightNode);
+    if (node?.kind === 'leaf' && node.parent) {
+      set.add(node.parent);
+    }
     return set;
   }, [highlightNode, links]);
 
   const sel = clusterIndex.get(selected ?? clusterIndex.keys().next().value ?? '');
-  const totalMemories = nodes.filter((n) => n.kind === 'cluster').reduce((s, c) => s + c.count, 0);
-  const totalLinks = links.filter((l) => {
-    const a = nodesRef.current.get(l.source);
-    const b = nodesRef.current.get(l.target);
-    return a?.kind === 'cluster' && b?.kind === 'cluster';
-  }).length;
+  const totalMemories = Array.from(clusterIndex.values()).reduce((s, c) => s + c.count, 0);
+  const totalLinks = useMemo(
+    () =>
+      links.filter((l) => {
+        const a = nodesRef.current.get(l.source);
+        const b = nodesRef.current.get(l.target);
+        return a?.kind === 'cluster' && b?.kind === 'cluster';
+      }).length,
+    [links]
+  );
 
   const memoryMix = useMemo(() => {
     if (!sel?.typeMix) return [];
@@ -645,6 +710,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
   }, [sel]);
 
   const drawNodes = draftRef.current;
+  const isPanning = panRef.current.active;
 
   return (
     <div className="route" style={{ padding: 0 }} data-screen-label="02 Graph">
@@ -672,15 +738,15 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           preserveAspectRatio="xMidYMid meet"
           onWheel={onWheel}
           onMouseDown={onMouseDown}
-          style={{ cursor: panRef.current.active ? 'grabbing' : 'grab' }}
+          style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
         >
           <defs>
             <radialGradient id="clusterGlow">
-              <stop offset="0%" stopColor="var(--cyan-300)" stopOpacity="0.35" />
+              <stop offset="0%" stopColor="var(--cyan-300)" stopOpacity="0.30" />
               <stop offset="100%" stopColor="var(--cyan-300)" stopOpacity="0" />
             </radialGradient>
             <filter id="leafGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -701,9 +767,10 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
               const a = nodesRef.current.get(l.source);
               const b = nodesRef.current.get(l.target);
               if (!a || !b) return null;
-              const isSel =
+              const isHi =
                 connectedSet && (connectedSet.has(l.source) || connectedSet.has(l.target));
               const isLeaf = a.kind === 'leaf' || b.kind === 'leaf';
+              const dimmed = connectedSet && !isHi;
               return (
                 <line
                   key={i}
@@ -711,18 +778,20 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                   y1={a.y}
                   x2={b.x}
                   y2={b.y}
-                  stroke={isSel ? 'var(--cyan-300)' : 'var(--line-3)'}
+                  stroke={isHi ? 'var(--cyan-300)' : isLeaf ? a.color : 'var(--line-3)'}
                   strokeOpacity={
-                    connectedSet ? (isSel ? 0.85 : 0.08) : isLeaf ? 0.32 : 0.42
+                    dimmed ? 0.06 : isHi ? 0.85 : isLeaf ? 0.22 : 0.45
                   }
-                  strokeWidth={isSel ? 1.3 : isLeaf ? 0.7 : 1}
-                  strokeDasharray={!isSel && !isLeaf ? '3 4' : '0'}
+                  strokeWidth={
+                    isHi ? (isLeaf ? 1.1 : 1.6) : isLeaf ? 0.7 : 1
+                  }
+                  strokeDasharray={!isHi && !isLeaf ? '3 5' : '0'}
                   pointerEvents="none"
                 />
               );
             })}
 
-            {/* Leaf nodes (memories) */}
+            {/* Leaves */}
             {drawNodes
               .filter((n) => n.kind === 'leaf')
               .map((n) => {
@@ -735,7 +804,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                     key={n.id}
                     data-node-id={n.id}
                     transform={`translate(${n.x} ${n.y})`}
-                    style={{ cursor: 'pointer', opacity: dim ? 0.18 : 1 }}
+                    style={{ cursor: 'pointer', opacity: dim ? 0.16 : 1 }}
                     onMouseDown={(e) => onNodeMouseDown(n.id, e)}
                     onMouseEnter={() => setHovered(n.id)}
                     onMouseLeave={() => setHovered(null)}
@@ -743,9 +812,9 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                     <circle
                       r={n.radius}
                       fill={n.color}
-                      fillOpacity={isHi ? 0.95 : 0.7}
+                      fillOpacity={isHi ? 0.95 : 0.78}
                       stroke={n.color}
-                      strokeOpacity={0.6}
+                      strokeOpacity={0.55}
                       strokeWidth="0.6"
                       filter="url(#leafGlow)"
                     />
@@ -753,7 +822,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                 );
               })}
 
-            {/* Cluster nodes */}
+            {/* Clusters */}
             {drawNodes
               .filter((n) => n.kind === 'cluster')
               .map((n) => {
@@ -765,26 +834,26 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                     key={n.id}
                     data-node-id={n.id}
                     transform={`translate(${n.x} ${n.y})`}
-                    style={{ cursor: 'pointer', opacity: dim ? 0.3 : 1 }}
+                    style={{ cursor: 'pointer', opacity: dim ? 0.32 : 1 }}
                     onMouseDown={(e) => onNodeMouseDown(n.id, e)}
                     onMouseEnter={() => setHovered(n.id)}
                     onMouseLeave={() => setHovered(null)}
                   >
-                    <circle r={n.radius * 1.8} fill="url(#clusterGlow)" opacity={isSel ? 1 : isHi ? 0.7 : 0.4} />
+                    <circle r={n.radius * 1.7} fill="url(#clusterGlow)" opacity={isSel ? 1 : isHi ? 0.65 : 0.4} />
                     <circle
                       r={n.radius}
                       fill={isSel ? 'var(--bg-3)' : 'var(--bg-2)'}
                       stroke={n.color}
-                      strokeWidth={isSel ? 2.4 : 1.4}
-                      strokeOpacity={isSel ? 1 : 0.85}
+                      strokeWidth={isSel ? 2.4 : 1.5}
+                      strokeOpacity={isSel ? 1 : 0.9}
                       filter={isSel ? 'url(#clusterRingGlow)' : undefined}
                     />
-                    <circle r={n.radius * 0.6} fill={n.color} opacity={isSel ? 0.22 : 0.12} />
+                    <circle r={n.radius * 0.55} fill={n.color} opacity={isSel ? 0.22 : 0.13} />
                     <text
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fill={isSel ? 'var(--ink-0)' : 'var(--ink-1)'}
-                      fontSize={Math.max(11, n.radius * 0.42)}
+                      fontSize={Math.max(13, n.radius * 0.4)}
                       fontWeight="600"
                       fontFamily="var(--font-sans)"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -794,20 +863,25 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                     <text
                       y={n.radius + 18}
                       textAnchor="middle"
-                      fill="var(--ink-1)"
-                      fontSize="12"
-                      fontFamily="var(--font-mono)"
-                      style={{ pointerEvents: 'none', letterSpacing: '0.04em', userSelect: 'none' }}
+                      fill={isSel ? 'var(--ink-0)' : 'var(--ink-1)'}
+                      fontSize="13"
+                      fontWeight="500"
+                      fontFamily="var(--font-sans)"
+                      style={{
+                        pointerEvents: 'none',
+                        letterSpacing: '0.02em',
+                        userSelect: 'none'
+                      }}
                     >
                       {n.label}
                     </text>
                     {isSel && (
                       <circle
-                        r={n.radius + 9}
+                        r={n.radius + 10}
                         fill="none"
                         stroke="var(--cyan-300)"
                         strokeOpacity="0.55"
-                        strokeDasharray="3 4"
+                        strokeDasharray="3 5"
                       >
                         <animateTransform
                           attributeName="transform"
@@ -829,7 +903,10 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           <button
             type="button"
             title="Zoom in"
-            onClick={() => setZoom((z) => Math.min(2, (z + 1) as 0 | 1 | 2))}
+            onClick={() => {
+              setZoom((z) => Math.min(2, (z + 1) as 0 | 1 | 2));
+              reheat();
+            }}
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14" />
@@ -838,7 +915,10 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           <button
             type="button"
             title="Zoom out"
-            onClick={() => setZoom((z) => Math.max(0, (z - 1) as 0 | 1 | 2))}
+            onClick={() => {
+              setZoom((z) => Math.max(0, (z - 1) as 0 | 1 | 2));
+              reheat();
+            }}
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14" />
@@ -857,7 +937,10 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
             <span
               key={z}
               className={`zoomstep ${zoom === z ? 'is-active' : ''}`}
-              onClick={() => setZoom(z as 0 | 1 | 2)}
+              onClick={() => {
+                setZoom(z as 0 | 1 | 2);
+                reheat();
+              }}
               role="button"
               tabIndex={0}
             >
@@ -877,7 +960,14 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         <div className="graph-legend">
           <h5>Clusters by source</h5>
           {Array.from(clusterIndex.values()).slice(0, 6).map((c) => (
-            <div key={c.id} className="legend-row">
+            <div
+              key={c.id}
+              className={`legend-row ${selected === c.id ? 'is-active' : ''}`}
+              onClick={() => setSelected(c.id)}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: 'pointer' }}
+            >
               <span className="swatch" style={{ background: c.color }} />
               <span>{c.label}</span>
               <span className="count tnum">{c.count.toLocaleString('en-US')}</span>
