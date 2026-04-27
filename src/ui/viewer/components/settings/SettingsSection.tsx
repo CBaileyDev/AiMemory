@@ -22,7 +22,7 @@ export function SettingsSection({ id, title, description, children }: SettingsSe
       className="am-settings-section"
       style={{ scrollMarginTop: 'var(--space-9)' }}
     >
-      <Panel elevation={1} padding="card-padding">
+      <Panel className="am-settings-section-panel" elevation={1} padding="card-padding">
         <Stack gap="4">
           <header>
             <h2

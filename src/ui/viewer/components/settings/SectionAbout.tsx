@@ -5,6 +5,7 @@ import { Stack } from '../primitives/Stack';
 import { Row } from '../primitives/Row';
 import { Panel } from '../primitives/Panel';
 import { Badge } from '../primitives/Badge';
+import type { Stats } from '../../types';
 
 interface Health {
   worker?: { uptime?: number; activeSessions?: number; sseClients?: number };
@@ -34,16 +35,25 @@ function formatUptime(seconds: number | undefined): string {
 
 export function SectionAbout() {
   const [health, setHealth] = React.useState<Health | null>(null);
+  const [stats, setStats] = React.useState<Stats | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch('/api/dashboard/health');
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = (await res.json()) as Health;
-        if (!cancelled) setHealth(data);
+        const [healthRes, statsRes] = await Promise.all([
+          fetch('/api/dashboard/health'),
+          fetch('/api/stats')
+        ]);
+        if (!healthRes.ok) throw new Error(`${healthRes.status}`);
+        const healthData = (await healthRes.json()) as Health;
+        const statsData = statsRes.ok ? ((await statsRes.json()) as Stats) : null;
+        if (!cancelled) {
+          setErr(null);
+          setHealth(healthData);
+          setStats(statsData);
+        }
       } catch (e) {
         if (!cancelled) setErr((e as Error).message);
       }
@@ -80,15 +90,19 @@ export function SectionAbout() {
             >
               <dt style={{ color: 'var(--color-text-muted)' }}>Uptime</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                {formatUptime(health?.worker?.uptime)}
+                {formatUptime(stats?.worker?.uptime ?? health?.worker?.uptime)}
+              </dd>
+              <dt style={{ color: 'var(--color-text-muted)' }}>Port</dt>
+              <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
+                {stats?.worker?.port ? `:${stats.worker.port}` : '—'}
               </dd>
               <dt style={{ color: 'var(--color-text-muted)' }}>Active sessions</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                {health?.worker?.activeSessions ?? '—'}
+                {stats?.worker?.activeSessions ?? health?.worker?.activeSessions ?? '—'}
               </dd>
               <dt style={{ color: 'var(--color-text-muted)' }}>SSE clients</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                {health?.worker?.sseClients ?? '—'}
+                {stats?.worker?.sseClients ?? health?.worker?.sseClients ?? '—'}
               </dd>
               <dt style={{ color: 'var(--color-text-muted)' }}>Queue depth</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
@@ -116,11 +130,23 @@ export function SectionAbout() {
             >
               <dt style={{ color: 'var(--color-text-muted)' }}>Path</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                {health?.database?.path ?? '—'}
+                {stats?.database?.path ?? health?.database?.path ?? '—'}
               </dd>
               <dt style={{ color: 'var(--color-text-muted)' }}>Size</dt>
               <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                {formatBytes(health?.database?.size)}
+                {formatBytes(stats?.database?.size ?? health?.database?.size)}
+              </dd>
+              <dt style={{ color: 'var(--color-text-muted)' }}>Observations</dt>
+              <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
+                {stats?.database?.observations?.toLocaleString('en-US') ?? '—'}
+              </dd>
+              <dt style={{ color: 'var(--color-text-muted)' }}>Sessions</dt>
+              <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
+                {stats?.database?.sessions?.toLocaleString('en-US') ?? '—'}
+              </dd>
+              <dt style={{ color: 'var(--color-text-muted)' }}>Summaries</dt>
+              <dd style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
+                {stats?.database?.summaries?.toLocaleString('en-US') ?? '—'}
               </dd>
             </dl>
           </Stack>

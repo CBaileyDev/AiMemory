@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from './Icons';
 import type { Route } from '../hooks/useRoute';
 
+const DEFAULT_WORKER_PORT = 37777;
+
 interface RailProps {
   route: Route;
   setRoute: (r: Route) => void;
@@ -12,6 +14,7 @@ interface RailProps {
   projects: string[];
   projectCounts: Record<string, number>;
   workerVersion: string;
+  workerPort?: number;
 }
 
 export function Rail({
@@ -23,7 +26,8 @@ export function Rail({
   totalSources,
   projects,
   projectCounts,
-  workerVersion
+  workerVersion,
+  workerPort = DEFAULT_WORKER_PORT
 }: RailProps) {
   const items: Array<{ id: Route; label: string; icon: React.ReactNode; meta?: string }> = [
     {
@@ -98,13 +102,13 @@ export function Rail({
       </div>
 
       <div className="rail-foot">
-        <WorkerTile isConnected={isConnected} />
+        <WorkerTile isConnected={isConnected} workerPort={workerPort} />
       </div>
     </aside>
   );
 }
 
-function WorkerTile({ isConnected }: { isConnected: boolean }) {
+function WorkerTile({ isConnected, workerPort }: { isConnected: boolean; workerPort: number }) {
   const [uptime, setUptime] = useState('—');
   const [pending, setPending] = useState<number | null>(null);
   const [dbSize, setDbSize] = useState<string>('—');
@@ -153,7 +157,7 @@ function WorkerTile({ isConnected }: { isConnected: boolean }) {
           }}
         />
         <span style={{ fontSize: 12, color: 'var(--ink-0)', fontWeight: 500 }}>{label}</span>
-        <span className="worker-value">:37777</span>
+        <span className="worker-value">:{workerPort}</span>
       </div>
       <div className="worker-row">
         <span className="worker-label">Uptime</span>
@@ -179,6 +183,7 @@ interface AppHeaderProps {
   onToggleConsole: () => void;
   onResync: () => void;
   onDoctor: () => void;
+  workerPort?: number;
 }
 
 export function AppHeader({
@@ -188,12 +193,13 @@ export function AppHeader({
   onTogglePalette,
   onToggleConsole,
   onResync,
-  onDoctor
+  onDoctor,
+  workerPort = DEFAULT_WORKER_PORT
 }: AppHeaderProps) {
   const status = !isConnected ? 'err' : isProcessing ? 'warn' : 'ok';
   const statusLabel =
     status === 'ok'
-      ? 'worker live · :37777'
+      ? `worker live · :${workerPort}`
       : status === 'warn'
         ? 'processing…'
         : 'offline';
@@ -241,6 +247,7 @@ interface StatusBarProps {
   sseSubs: number;
   consoleOpen: boolean;
   onToggleConsole: () => void;
+  workerPort?: number;
 }
 
 export function StatusBar({
@@ -248,7 +255,8 @@ export function StatusBar({
   observationCount,
   sseSubs,
   consoleOpen,
-  onToggleConsole
+  onToggleConsole,
+  workerPort = DEFAULT_WORKER_PORT
 }: StatusBarProps) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -265,7 +273,7 @@ export function StatusBar({
           className={`dot ${dotClass}`}
           style={{ color: isConnected ? 'var(--ok)' : 'var(--err)' }}
         />{' '}
-        <b>worker</b> :37777
+        <b>worker</b> :{workerPort}
       </span>
       <span className="sep">|</span>
       <span className="seg">
@@ -400,15 +408,21 @@ interface OfflineBannerProps {
   visible: boolean;
   onRetry: () => void;
   onOpenConsole: () => void;
+  workerPort?: number;
 }
 
-export function OfflineBanner({ visible, onRetry, onOpenConsole }: OfflineBannerProps) {
+export function OfflineBanner({
+  visible,
+  onRetry,
+  onOpenConsole,
+  workerPort = DEFAULT_WORKER_PORT
+}: OfflineBannerProps) {
   if (!visible) return null;
   return (
     <div className="banner err" role="alert">
       <span className="dot err" />
       <div>
-        <div style={{ fontWeight: 500 }}>Worker unreachable on :37777</div>
+        <div style={{ fontWeight: 500 }}>Worker unreachable on :{workerPort}</div>
         <div className="muted" style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>
           cached data shown · reconnecting
         </div>

@@ -11,12 +11,16 @@
  */
 
 import { describe, it, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test';
+import { rmSync, writeFileSync } from 'fs';
 import type { Request, Response } from 'express';
 import { logger } from '../../../../src/utils/logger.js';
 
+const MOCK_DB_PATH = '/tmp/claude-mem-data-routes-test.db';
+
 // Mock dependencies before importing DataRoutes
 mock.module('../../../../src/shared/paths.js', () => ({
-  getPackageRoot: () => '/tmp/test',
+  DB_PATH: MOCK_DB_PATH,
+  getPackageRoot: () => process.cwd(),
 }));
 mock.module('../../../../src/shared/worker-utils.js', () => ({
   getWorkerPort: () => 37777,
@@ -42,6 +46,7 @@ describe('DataRoutes Type Coercion', () => {
   let routes: DataRoutes;
   let mockGetObservationsByIds: ReturnType<typeof mock>;
   let mockGetSdkSessionsBySessionIds: ReturnType<typeof mock>;
+  let mockPrepare: ReturnType<typeof mock>;
 
   beforeEach(() => {
     loggerSpies = [
@@ -54,9 +59,18 @@ describe('DataRoutes Type Coercion', () => {
 
     mockGetObservationsByIds = mock(() => [{ id: 1 }, { id: 2 }]);
     mockGetSdkSessionsBySessionIds = mock(() => [{ id: 'abc' }]);
+    mockPrepare = mock((sql: string) => ({
+      get: mock(() => {
+        if (sql.includes('FROM observations')) return { count: 7 };
+        if (sql.includes('FROM sdk_sessions')) return { count: 3 };
+        if (sql.includes('FROM session_summaries')) return { count: 2 };
+        return { count: 0 };
+      })
+    }));
 
     const mockDbManager = {
       getSessionStore: () => ({
+        db: { prepare: mockPrepare },
         getObservationsByIds: mockGetObservationsByIds,
         getSdkSessionsBySessionIds: mockGetSdkSessionsBySessionIds,
       }),
@@ -65,16 +79,48 @@ describe('DataRoutes Type Coercion', () => {
     routes = new DataRoutes(
       {} as any, // paginationHelper
       mockDbManager as any,
-      {} as any, // sessionManager
-      {} as any, // sseBroadcaster
+      { getActiveSessionCount: mock(() => 0) } as any, // sessionManager
+      { getClientCount: mock(() => 0) } as any, // sseBroadcaster
       {} as any, // workerService
       Date.now()
     );
   });
 
   afterEach(() => {
+    rmSync(MOCK_DB_PATH, { force: true });
     loggerSpies.forEach(spy => spy.mockRestore());
     mock.restore();
+  });
+
+  describe('handleGetStats', () => {
+    let handler: (req: Request, res: Response) => void;
+
+    beforeEach(() => {
+      const mockApp = {
+        get: mock((path: string, fn: any) => {
+          if (path === '/api/stats') handler = fn;
+        }),
+        post: mock(() => {}),
+        delete: mock(() => {}),
+      };
+      routes.setupRoutes(mockApp as any);
+    });
+
+    it('reports the configured database path and size instead of a hard-coded production DB', () => {
+      writeFileSync(MOCK_DB_PATH, 'test database bytes');
+
+      const { req, res, jsonSpy } = createMockReqRes({});
+      handler(req as Request, res as Response);
+
+      expect(jsonSpy).toHaveBeenCalled();
+      const payload = jsonSpy.mock.calls[0][0] as any;
+      expect(payload.database.path).toBe(MOCK_DB_PATH);
+      expect(payload.database.size).toBe(19);
+      expect(payload.database.observations).toBe(7);
+      expect(payload.database.sessions).toBe(3);
+      expect(payload.database.summaries).toBe(2);
+      expect(payload.worker.port).toBe(37777);
+    });
   });
 
   describe('handleGetObservationsByIds — ids coercion', () => {

@@ -12,6 +12,7 @@ import {
   cleanStalePidFile,
   isPidFileRecent,
   touchPidFile,
+  collectProtectedWorkerPids,
   spawnDaemon,
   resolveWorkerRuntimePath,
   runOneTimeChromaMigration,
@@ -155,6 +156,66 @@ describe('ProcessManager', () => {
       expect(parseElapsedTime('')).toBe(-1);
       expect(parseElapsedTime('   ')).toBe(-1);
       expect(parseElapsedTime('invalid')).toBe(-1);
+    });
+  });
+
+  describe('collectProtectedWorkerPids', () => {
+    it('protects the current process, parent process, and healthy workers from known data dirs', () => {
+      const prodDir = path.join(testDataDir, 'prod');
+      const devDir = path.join(testDataDir, 'dev');
+      mkdirSync(prodDir, { recursive: true });
+      mkdirSync(devDir, { recursive: true });
+
+      writeFileSync(path.join(prodDir, 'worker.pid'), JSON.stringify({
+        pid: 4444,
+        port: 37777,
+        startedAt: '2026-04-26T00:00:00.000Z'
+      }));
+      writeFileSync(path.join(devDir, 'worker.pid'), JSON.stringify({
+        pid: 5555,
+        port: 37780,
+        startedAt: '2026-04-26T00:00:00.000Z'
+      }));
+
+      const protectedPids = collectProtectedWorkerPids({
+        currentPid: 1111,
+        parentPid: 2222,
+        dataDirs: [prodDir, devDir],
+        isAlive: () => true
+      });
+
+      expect(Array.from(protectedPids).sort((a, b) => a - b)).toEqual([1111, 2222, 4444, 5555]);
+    });
+
+    it('ignores malformed, missing, and stale PID files', () => {
+      const healthyDir = path.join(testDataDir, 'healthy');
+      const staleDir = path.join(testDataDir, 'stale');
+      const malformedDir = path.join(testDataDir, 'malformed');
+      const missingDir = path.join(testDataDir, 'missing');
+      mkdirSync(healthyDir, { recursive: true });
+      mkdirSync(staleDir, { recursive: true });
+      mkdirSync(malformedDir, { recursive: true });
+
+      writeFileSync(path.join(healthyDir, 'worker.pid'), JSON.stringify({
+        pid: 4444,
+        port: 37777,
+        startedAt: '2026-04-26T00:00:00.000Z'
+      }));
+      writeFileSync(path.join(staleDir, 'worker.pid'), JSON.stringify({
+        pid: 5555,
+        port: 37780,
+        startedAt: '2026-04-26T00:00:00.000Z'
+      }));
+      writeFileSync(path.join(malformedDir, 'worker.pid'), 'not json');
+
+      const protectedPids = collectProtectedWorkerPids({
+        currentPid: 1111,
+        parentPid: 2222,
+        dataDirs: [healthyDir, staleDir, malformedDir, missingDir],
+        isAlive: (pid) => pid !== 5555
+      });
+
+      expect(Array.from(protectedPids).sort((a, b) => a - b)).toEqual([1111, 2222, 4444]);
     });
   });
 

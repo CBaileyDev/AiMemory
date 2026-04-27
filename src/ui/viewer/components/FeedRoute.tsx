@@ -342,10 +342,12 @@ function SavingsLedger({ dashboard }: { dashboard: DashboardSnapshot | null }) {
 
 function KpiStack({
   dashboard,
-  isConnected
+  isConnected,
+  workerPort
 }: {
   dashboard: DashboardSnapshot | null;
   isConnected: boolean;
+  workerPort: number;
 }) {
   const totals = dashboard?.totals;
   const sources = dashboard?.sources ?? [];
@@ -441,7 +443,7 @@ function KpiStack({
             <span style={{ color: isConnected ? 'var(--ok)' : 'var(--err)' }}>
               ● {isConnected ? 'live' : 'offline'}
             </span>{' '}
-            · :37777
+            · :{workerPort}
           </div>
         </div>
         <div className="kpi-ring">
@@ -780,6 +782,7 @@ interface FeedRouteProps {
   hasMore: boolean;
   isLoading: boolean;
   highlightedId: number | null;
+  workerPort?: number;
   onJump?: (id: number) => void;
 }
 
@@ -792,6 +795,7 @@ export function FeedRoute({
   hasMore,
   isLoading,
   highlightedId,
+  workerPort = 37777,
   onJump
 }: FeedRouteProps) {
   const [filters, setFilters] = useState<FilterState>({
@@ -844,7 +848,7 @@ export function FeedRoute({
 
       <div className="dash-grid">
         <SavingsLedger dashboard={dashboard} />
-        <KpiStack dashboard={dashboard} isConnected={isConnected} />
+        <KpiStack dashboard={dashboard} isConnected={isConnected} workerPort={workerPort} />
       </div>
 
       <FilterBar filters={filters} setFilters={setFilters} sourceCounts={sourceCounts} />

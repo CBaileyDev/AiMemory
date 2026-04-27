@@ -103,9 +103,11 @@ export interface WorkerStats {
   uptime?: number;
   activeSessions?: number;
   sseClients?: number;
+  port?: number;
 }
 
 export interface DatabaseStats {
+  path?: string;
   size?: number;
   observations?: number;
   sessions?: number;

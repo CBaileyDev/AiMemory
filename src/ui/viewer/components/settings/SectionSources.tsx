@@ -69,14 +69,21 @@ export function SectionSources({ sources, onChange, detectedSourceIds }: Props) 
           </Button>
         </Row>
 
-        <Stack gap="3">
+        <div className="am-source-settings-grid">
           {SOURCE_IDS.map(id => {
             const block = (sources[id] ?? {}) as Record<string, unknown>;
             const enabled = block.enabled !== false;
             const summarizeThreshold = String(block.summarizeThreshold ?? '');
+            const isDetected = detected.has(id);
 
             return (
-              <Panel key={id} elevation={0} padding="3" radius="md">
+              <Panel
+                key={id}
+                elevation={0}
+                padding="3"
+                radius="md"
+                className={`am-source-settings-card ${enabled ? 'is-enabled' : 'is-disabled'} ${isDetected ? 'is-detected' : ''}`.trim()}
+              >
                 <Stack gap="2">
                   <Row gap="3" align="center" justify="space-between" wrap>
                     <Row gap="2" align="center">
@@ -87,7 +94,7 @@ export function SectionSources({ sources, onChange, detectedSourceIds }: Props) 
                       <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                         {id}
                       </code>
-                      {detected.has(id) && <Badge tone="success">active</Badge>}
+                      {isDetected && <Badge tone="success">live</Badge>}
                     </Row>
 
                     <Chip
@@ -101,7 +108,7 @@ export function SectionSources({ sources, onChange, detectedSourceIds }: Props) 
 
                   {enabled && (
                     <Stack gap="2">
-                      <Row gap="3" wrap>
+                      <Row className="am-source-toggle-row" gap="2" wrap>
                         {TOGGLES.map(t => {
                           const on = block[t.key] === true;
                           return (
@@ -116,7 +123,7 @@ export function SectionSources({ sources, onChange, detectedSourceIds }: Props) 
                         })}
                       </Row>
 
-                      <Row gap="2" align="center" wrap>
+                      <Row className="am-source-threshold-row" gap="2" align="center" wrap>
                         <label
                           htmlFor={`src-${id}-summarize`}
                           style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
@@ -158,7 +165,7 @@ export function SectionSources({ sources, onChange, detectedSourceIds }: Props) 
               </Panel>
             );
           })}
-        </Stack>
+        </div>
       </Stack>
     </SettingsSection>
   );

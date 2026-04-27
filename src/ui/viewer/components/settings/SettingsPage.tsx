@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import type { Settings } from '../../types';
+import type { Settings, Stats } from '../../types';
 import type { NeonScheme } from '../../hooks/useTheme';
 import { SETTINGS_SECTIONS, sectionFields, validateAll } from '../../state/settingsSchema';
 import type { ValidationIssue, SettingsSectionDef } from '../../state/settingsSchema';
@@ -39,6 +39,14 @@ interface SettingsPageProps {
   variant?: 'modal' | 'page';
   /** Catalog of source ids detected in the live SSE stream. */
   detectedSources: string[];
+  /** Live worker/database stats surfaced by the viewer shell. */
+  stats?: Stats;
+  /** Active worker port derived from stats, URL, or settings fallback. */
+  workerPort: number;
+  /** Worker SSE connection state. */
+  isConnected: boolean;
+  /** Pending worker queue depth. */
+  queueDepth: number;
   /** Invoked when the user explicitly closes the settings surface. */
   onClose: () => void;
 }
@@ -77,8 +85,35 @@ function extractSourcesBlockFromSettings(raw: Record<string, unknown>): SourcesB
   return {};
 }
 
+function formatBytes(n: number | undefined): string {
+  if (!n || !Number.isFinite(n)) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatCount(n: number | undefined, label: string): string {
+  if (!Number.isFinite(n)) return `— ${label}`;
+  return `${Number(n).toLocaleString('en-US')} ${label}`;
+}
+
 export function SettingsPage(props: SettingsPageProps) {
-  const { settings, onSave, isSaving, saveStatus, scheme, onSchemeChange, detectedSources, onClose, variant = 'modal' } = props;
+  const {
+    settings,
+    onSave,
+    isSaving,
+    saveStatus,
+    scheme,
+    onSchemeChange,
+    detectedSources,
+    stats,
+    workerPort,
+    isConnected,
+    queueDepth,
+    onClose,
+    variant = 'modal'
+  } = props;
 
   // Fetch the raw settings file once to pick up the `sources` block that
   // isn't included in the Settings TS type. Posts back the merged object
@@ -247,30 +282,47 @@ export function SettingsPage(props: SettingsPageProps) {
           overflow: 'hidden'
         }}
       >
-        {/* Header */}
-        <Row
-          gap="3"
-          align="center"
-          justify="space-between"
-          style={{
-            padding: 'var(--space-4) var(--space-5)',
-            borderBottom: '1px solid var(--color-border-primary)',
-            background: 'var(--color-bg-header)'
-          }}
-        >
-          <h1
-            id="am-settings-title"
-            style={{ margin: 0, fontSize: 'var(--text-xl)', color: 'var(--color-text-title)', fontWeight: 700 }}
-          >
-            Settings
-          </h1>
-          <IconButton label="Close settings (Esc)" onClick={onClose} variant="ghost">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </IconButton>
-        </Row>
+        <div className="am-settings-hero">
+          <Row gap="3" align="start" justify="space-between">
+            <div>
+              <h1 id="am-settings-title" className="am-settings-title">
+                Settings
+              </h1>
+              <p className="am-settings-subtitle">
+                Runtime, capture, search, privacy, and integration controls for this local worker.
+              </p>
+            </div>
+            <IconButton label="Close settings (Esc)" onClick={onClose} variant="ghost">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </IconButton>
+          </Row>
+
+          <div className="am-settings-health-grid" aria-label="Live settings data">
+            <div className="am-settings-health-card">
+              <span>Active worker port</span>
+              <strong>:{workerPort}</strong>
+              <small>{isConnected ? 'worker live' : 'worker offline'} · {queueDepth} pending</small>
+            </div>
+            <div className="am-settings-health-card is-wide">
+              <span>Database</span>
+              <strong>{formatCount(stats?.database?.observations, 'observations')}</strong>
+              <small title={stats?.database?.path}>{stats?.database?.path ?? 'waiting for /api/stats'}</small>
+            </div>
+            <div className="am-settings-health-card">
+              <span>Memory rows</span>
+              <strong>{formatCount(stats?.database?.sessions, 'sessions')}</strong>
+              <small>{formatCount(stats?.database?.summaries, 'summaries')} · {formatBytes(stats?.database?.size)}</small>
+            </div>
+            <div className="am-settings-health-card">
+              <span>Detected sources</span>
+              <strong>{detectedSources.length.toLocaleString('en-US')} active</strong>
+              <small>from the live SSE catalog</small>
+            </div>
+          </div>
+        </div>
 
         {/* Body: left nav + right scroller */}
         <div className="am-settings-layout" style={{ flex: 1, display: 'flex', minHeight: 0 }}>

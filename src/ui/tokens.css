@@ -143,9 +143,27 @@
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
   --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
   --sp-9: 48px; --sp-10: 64px;
+  --space-0: 0;
+  --space-1: var(--sp-1);
+  --space-2: var(--sp-2);
+  --space-3: var(--sp-3);
+  --space-4: var(--sp-4);
+  --space-5: var(--sp-5);
+  --space-6: var(--sp-6);
+  --space-7: var(--sp-7);
+  --space-8: var(--sp-8);
+  --space-9: var(--sp-9);
+  --space-10: var(--sp-10);
+  --space-card-gap: var(--sp-4);
+  --space-card-padding: var(--sp-5);
+  --space-feed-gutter: var(--sp-5);
 
   /* ---------- Radius ---------- */
   --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 10px; --r-5: 14px; --r-6: 20px; --r-pill: 999px;
+  --radius-sm: var(--r-2);
+  --radius-md: var(--r-3);
+  --radius-lg: var(--r-4);
+  --radius-pill: var(--r-pill);
 
   /* ---------- Elevation ---------- */
   --shadow-1: 0 1px 0 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -3518,4 +3536,604 @@ html[data-tauri='true'] .app {
 
 .graph-legend .legend-row.is-active .count {
   color: var(--cyan-200);
+}
+
+/* Settings polish */
+.am-settings-hero {
+  padding: var(--sp-6) var(--sp-7) var(--sp-5);
+  border-bottom: 1px solid var(--line-1);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), transparent 38%),
+    linear-gradient(180deg, var(--bg-1), rgba(11, 15, 20, 0.92));
+}
+
+.am-settings-title {
+  margin: 0;
+  color: var(--ink-0);
+  font-size: var(--fs-24);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.am-settings-subtitle {
+  margin: var(--sp-2) 0 0;
+  max-width: 56rem;
+  color: var(--ink-2);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+
+.am-settings-health-grid {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(18rem, 1.6fr) repeat(2, minmax(10rem, 1fr));
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+}
+
+.am-settings-health-card {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: rgba(16, 22, 29, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.am-settings-health-card span {
+  display: block;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+
+.am-settings-health-card strong {
+  display: block;
+  margin-top: var(--sp-2);
+  color: var(--ink-0);
+  font-size: var(--fs-16);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.am-settings-health-card small {
+  display: block;
+  margin-top: var(--sp-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.am-settings-section-panel {
+  border: 1px solid var(--line-1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 7rem),
+    var(--bg-2) !important;
+}
+
+.am-source-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: var(--sp-3);
+}
+
+.am-source-settings-card {
+  border: 1px solid var(--line-1);
+  background: rgba(11, 15, 20, 0.38) !important;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out),
+    transform var(--dur-1) var(--ease-out);
+}
+
+.am-source-settings-card.is-detected {
+  border-color: rgba(16, 185, 129, 0.32);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.08), transparent 44%),
+    rgba(11, 15, 20, 0.5) !important;
+}
+
+.am-source-settings-card.is-disabled {
+  opacity: 0.62;
+}
+
+.am-source-settings-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-2);
+}
+
+.am-source-toggle-row {
+  padding-top: var(--sp-2);
+}
+
+.am-source-threshold-row {
+  padding-top: var(--sp-1);
+  border-top: 1px solid var(--line-1);
+}
+
+/* Graph polish */
+.route[data-screen-label="02 Graph"] {
+  min-width: 0;
+}
+
+.route[data-screen-label="02 Graph"] .route-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.graph-stage {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.graph-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 34% 42%, rgba(248, 113, 113, 0.06), transparent 18rem),
+    radial-gradient(circle at 70% 34%, rgba(96, 165, 250, 0.06), transparent 20rem),
+    radial-gradient(circle at 52% 68%, rgba(167, 139, 250, 0.05), transparent 18rem);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.graph-grid,
+.graph-svg {
+  z-index: 1;
+}
+
+.graph-controls,
+.graph-zoomstrip,
+.graph-legend,
+.graph-inspector,
+.graph-minimap,
+.graph-breadcrumbs,
+.graph-hint {
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.graph-controls,
+.graph-zoomstrip,
+.graph-legend,
+.graph-inspector,
+.graph-minimap,
+.graph-breadcrumbs {
+  background: rgba(16, 22, 29, 0.84);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.graph-controls {
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22);
+}
+
+.graph-controls button:disabled,
+.graph-inspector .btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.graph-zoomstrip {
+  gap: 3px;
+  padding: 5px;
+}
+
+.zoomstep {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.zoomstep.is-active {
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.2);
+}
+
+.graph-inspector {
+  width: min(23rem, calc(100% - var(--sp-8)));
+  border-radius: var(--r-4);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+}
+
+.graph-inspector.is-memory {
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
+.graph-inspector .btn {
+  justify-content: center;
+}
+
+.graph-project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.graph-project-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-project-row b {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+@media (min-width: 921px) {
+  .graph-minimap {
+    right: calc(23rem + var(--sp-6));
+  }
+}
+
+/* ============================================================
+ * Responsive app shell
+ * Keeps the viewer usable on narrow browser panes and mobile-sized
+ * Tauri windows without horizontal document overflow.
+ * ============================================================ */
+
+@media (max-width: 920px) {
+  html,
+  body,
+  #root {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--header-h) auto minmax(0, 1fr) var(--statusbar-h);
+    grid-template-areas:
+      "header"
+      "rail"
+      "main"
+      "status";
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .hdr {
+    min-width: 0;
+    gap: var(--sp-2);
+    padding: 0 var(--sp-3);
+  }
+
+  .hdr-search {
+    min-width: 0;
+    max-width: none;
+    padding-inline: var(--sp-3);
+  }
+
+  .hdr-search-shortcut {
+    display: none;
+  }
+
+  .hdr-actions {
+    flex: 0 0 auto;
+    gap: 4px;
+    margin-left: 0;
+  }
+
+  .hdr-btn {
+    width: 32px;
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .hdr-btn svg {
+    flex: 0 0 auto;
+  }
+
+  .hdr-actions .src {
+    width: 12px;
+    overflow: hidden;
+    font-size: 0 !important;
+    white-space: nowrap;
+  }
+
+  .hdr-actions .src .dot {
+    margin-right: 0;
+  }
+
+  .rail {
+    min-width: 0;
+    max-width: 100vw;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .rail-brand,
+  .rail-foot,
+  .rail > .rail-section + .rail-section,
+  .rail-scroll > .rail-section:not(:first-child) {
+    display: none;
+  }
+
+  .rail-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .rail > .rail-section,
+  .rail-scroll > .rail-section:first-child {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rail > .rail-section::-webkit-scrollbar,
+  .rail-scroll > .rail-section:first-child::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rail-section-title {
+    display: none;
+  }
+
+  .rail .nav-item {
+    flex: 0 0 auto;
+    min-width: 92px;
+    height: 36px;
+  }
+
+  .rail .nav-item.is-active::before {
+    top: auto;
+    right: 8px;
+    bottom: -1px;
+    left: 8px;
+    width: auto;
+    height: 2px;
+  }
+
+  .nav-item-label,
+  .file-pill,
+  .chip {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .main {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .route {
+    width: 100%;
+    min-width: 0;
+    padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  }
+
+  .am-settings-hero {
+    padding: var(--sp-5) var(--sp-4);
+  }
+
+  .am-settings-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .am-source-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .route-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  .route-sub {
+    margin-left: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .dash-grid,
+  .feed-layout,
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sources-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-layout {
+    gap: var(--sp-5);
+  }
+
+  .am-settings-layout {
+    flex-direction: column !important;
+  }
+
+  .am-settings-nav {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--color-border-primary);
+  }
+
+  .am-settings-nav-list {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    min-width: max-content;
+  }
+
+  .am-settings-nav-list a {
+    white-space: nowrap;
+  }
+
+  .am-settings-scroller {
+    min-width: 0;
+    padding: var(--space-4) !important;
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: var(--sp-1);
+  }
+
+  .settings-nav .nav-item {
+    flex: 0 0 auto;
+  }
+
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-2);
+  }
+
+  .field-control,
+  .input,
+  textarea,
+  select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .statusbar {
+    min-width: 0;
+    gap: var(--sp-3);
+    padding: 0 var(--sp-3);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .statusbar .right {
+    display: none;
+  }
+
+  .route[data-screen-label="02 Graph"] > div:first-child {
+    align-items: flex-start !important;
+    flex-direction: column;
+    min-width: 0;
+    padding: var(--sp-5) var(--sp-4) var(--sp-3) !important;
+  }
+
+  .route[data-screen-label="02 Graph"] .route-sub {
+    white-space: normal;
+  }
+
+  .graph-stage {
+    width: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 0 var(--sp-3) var(--sp-4);
+    min-height: 68vh;
+  }
+
+  .graph-zoomstrip {
+    right: var(--sp-3);
+    left: 48px;
+    transform: none;
+    max-width: calc(100% - 60px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .graph-zoomstrip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .zoomstep {
+    white-space: nowrap;
+  }
+
+  .graph-breadcrumbs {
+    display: none;
+  }
+
+  .graph-inspector {
+    top: auto;
+    right: var(--sp-3);
+    bottom: var(--sp-3);
+    left: var(--sp-3);
+    width: auto;
+    max-height: 34vh;
+    padding: var(--sp-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .hdr-search-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rail .nav-item {
+    min-width: 74px;
+    gap: var(--sp-2);
+  }
+
+  .rail .nav-item-meta {
+    display: none;
+  }
+
+  .mem {
+    grid-template-columns: 24px minmax(0, 1fr);
+    padding: var(--sp-4);
+  }
+
+  .mem-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .mem-side {
+    grid-column: 2;
+    min-width: 0;
+    align-items: flex-start;
+    flex-flow: row wrap;
+  }
+
+  .mem-meta {
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+  }
+
+  .src-head,
+  .src-foot,
+  .daygroup-head {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .src-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .graph-legend,
+  .graph-minimap,
+  .graph-hint {
+    display: none;
+  }
+
+  .am-settings-health-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .am-settings-health-card small {
+    white-space: normal;
+  }
 }

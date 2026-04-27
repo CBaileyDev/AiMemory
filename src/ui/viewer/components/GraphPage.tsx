@@ -80,6 +80,13 @@ interface SimNode {
   label: string;
   color: string;
   parent?: string;
+  project?: string;
+  leafKind?: 'observation' | 'summary' | 'prompt';
+  dbId?: number;
+  createdAt?: number;
+  firstObservationId?: number;
+  lastSeen?: number;
+  projectBreakdown?: Array<[string, number]>;
   radius: number;
   mass: number;
   count: number;
@@ -121,9 +128,23 @@ function compactNumber(n: number): string {
   return String(n);
 }
 
+function formatRelative(epochMs?: number): string {
+  if (!epochMs || !Number.isFinite(epochMs)) return '—';
+  const delta = Math.max(0, Date.now() - epochMs);
+  const minutes = Math.floor(delta / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(epochMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 const W = 1600;
 const H = 900;
 const CENTER = { x: W / 2, y: H / 2 };
+const DEFAULT_VIEW = { k: 1, tx: -170, ty: 0 };
 
 const ALPHA_DECAY = 0.985;
 const ALPHA_MIN = 0.01;
@@ -294,25 +315,32 @@ function tickSim(
   }
 }
 
-export function GraphPage({ observations, summaries, prompts }: GraphPageProps) {
+export function GraphPage({ observations, summaries, prompts, onJumpToObservation }: GraphPageProps) {
   const [zoom, setZoom] = useState<0 | 1 | 2>(1);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedMemory, setSelectedMemory] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
+  const [view, setView] = useState(DEFAULT_VIEW);
 
   // Derive nodes and links from data
   const { nodes, links, clusterIndex } = useMemo(() => {
     const bySource = new Map<string, SimNode>();
     const projectsBySource = new Map<string, Set<string>>();
+    const projectCountsBySource = new Map<string, Map<string, number>>();
     const conceptsBySource = new Map<string, Map<string, number>>();
     const typeMixBySource = new Map<string, Map<string, number>>();
 
-    const addItem = (
-      sourceRaw: string | null | undefined,
-      project: string | null | undefined,
-      type: string | null | undefined,
-      concepts: string | null | undefined
-    ) => {
+    const addItem = (item: {
+      sourceRaw: string | null | undefined;
+      project: string | null | undefined;
+      type: string | null | undefined;
+      concepts: string | null | undefined;
+      kind: 'observation' | 'summary' | 'prompt';
+      id: number;
+      title: string;
+      createdAt: number;
+    }) => {
+      const { sourceRaw, project, type, concepts, kind, id, createdAt } = item;
       const source = (sourceRaw || 'claude').toLowerCase();
       let cluster = bySource.get(source);
       if (!cluster) {
@@ -331,11 +359,20 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         };
         bySource.set(source, cluster);
         projectsBySource.set(source, new Set());
+        projectCountsBySource.set(source, new Map());
         conceptsBySource.set(source, new Map());
         typeMixBySource.set(source, new Map());
       }
       cluster.count += 1;
-      if (project) projectsBySource.get(source)!.add(project);
+      if (kind === 'observation' && cluster.firstObservationId == null) {
+        cluster.firstObservationId = id;
+      }
+      cluster.lastSeen = Math.max(cluster.lastSeen ?? 0, createdAt || 0);
+      if (project) {
+        projectsBySource.get(source)!.add(project);
+        const pc = projectCountsBySource.get(source)!;
+        pc.set(project, (pc.get(project) ?? 0) + 1);
+      }
       const typeKey = normalizeType(type);
       const tm = typeMixBySource.get(source)!;
       tm.set(typeKey, (tm.get(typeKey) ?? 0) + 1);
@@ -354,9 +391,36 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
       }
     };
 
-    observations.forEach((o) => addItem(o.platform_source, o.project, o.type, o.concepts ?? null));
-    summaries.forEach((s) => addItem(s.platform_source, s.project, 'completed', null));
-    prompts.forEach((p) => addItem(p.platform_source, p.project, 'prompt', null));
+    observations.forEach((o) => addItem({
+      sourceRaw: o.platform_source,
+      project: o.project,
+      type: o.type,
+      concepts: o.concepts ?? null,
+      kind: 'observation',
+      id: o.id,
+      title: o.title ?? 'Observation',
+      createdAt: o.created_at_epoch
+    }));
+    summaries.forEach((s) => addItem({
+      sourceRaw: s.platform_source,
+      project: s.project,
+      type: 'completed',
+      concepts: null,
+      kind: 'summary',
+      id: s.id,
+      title: s.request ?? 'Session summary',
+      createdAt: s.created_at_epoch
+    }));
+    prompts.forEach((p) => addItem({
+      sourceRaw: p.platform_source,
+      project: p.project,
+      type: 'prompt',
+      concepts: null,
+      kind: 'prompt',
+      id: p.id,
+      title: p.prompt_text ?? 'Prompt',
+      createdAt: p.created_at_epoch
+    }));
 
     const clusters = Array.from(bySource.values());
     clusters.sort((a, b) => b.count - a.count);
@@ -378,6 +442,8 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         .slice(0, 12)
         .map(([k]) => k);
       c.typeMix = typeMixBySource.get(c.id);
+      c.projectBreakdown = Array.from(projectCountsBySource.get(c.id)!.entries())
+        .sort((a, b) => b[1] - a[1]);
     });
 
     const allNodes: SimNode[] = [...top];
@@ -420,21 +486,46 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
 
     // Leaves at zoom >= 1 — sample, capped per-cluster for clarity
     if (zoom >= 1) {
-      const recent: Array<{ source: string; id: number; type: string; title: string }> = [];
+      const recent: Array<{
+        source: string;
+        id: number;
+        type: string;
+        title: string;
+        kind: 'observation' | 'summary' | 'prompt';
+        project: string;
+        createdAt: number;
+      }> = [];
       observations.slice(0, 200).forEach((o) =>
         recent.push({
           source: (o.platform_source || 'claude').toLowerCase(),
           id: o.id,
           type: normalizeType(o.type),
-          title: o.title ?? 'observation'
+          title: o.title ?? 'Observation',
+          kind: 'observation',
+          project: o.project ?? '',
+          createdAt: o.created_at_epoch
         })
       );
       summaries.slice(0, 60).forEach((s) =>
         recent.push({
           source: (s.platform_source || 'claude').toLowerCase(),
-          id: s.id + 100000,
+          id: s.id,
           type: 'completed',
-          title: s.request ?? 'summary'
+          title: s.request ?? 'Session summary',
+          kind: 'summary',
+          project: s.project ?? '',
+          createdAt: s.created_at_epoch
+        })
+      );
+      prompts.slice(0, 60).forEach((p) =>
+        recent.push({
+          source: (p.platform_source || 'claude').toLowerCase(),
+          id: p.id,
+          type: 'prompt',
+          title: p.prompt_text ?? 'Prompt',
+          kind: 'prompt',
+          project: p.project ?? '',
+          createdAt: p.created_at_epoch
         })
       );
 
@@ -452,12 +543,16 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         const angle = (slot / slotsTotal) * Math.PI * 2;
         const r = c.radius + 56;
         const node: SimNode = {
-          id: `${m.source}:${m.id}`,
+          id: `${m.source}:${m.kind}:${m.id}`,
           kind: 'leaf',
           parent: m.source,
           label: m.title.slice(0, 60),
           color: TYPE_COLORS[m.type] ?? 'var(--ink-2)',
           type: m.type,
+          leafKind: m.kind,
+          dbId: m.id,
+          project: m.project,
+          createdAt: m.createdAt,
           radius: zoom === 2 ? 6 : 5,
           mass: 0.18,
           count: 1,
@@ -517,6 +612,13 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
         existing.kind = n.kind;
         existing.parent = n.parent;
         existing.type = n.type;
+        existing.leafKind = n.leafKind;
+        existing.dbId = n.dbId;
+        existing.project = n.project;
+        existing.createdAt = n.createdAt;
+        existing.firstObservationId = n.firstObservationId;
+        existing.lastSeen = n.lastSeen;
+        existing.projectBreakdown = n.projectBreakdown;
         existing.projects = n.projects;
         existing.concepts = n.concepts;
         existing.typeMix = n.typeMix;
@@ -662,17 +764,38 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
       dragRef.current = { id, offX: node.x - w.x, offY: node.y - w.y };
       node.fx = node.x;
       node.fy = node.y;
-      if (node.kind === 'cluster') setSelected(id);
+      if (node.kind === 'cluster') {
+        setSelected(id);
+        setSelectedMemory(null);
+      }
     },
     [screenToWorld]
   );
 
   const fit = useCallback(() => {
-    setView({ k: 1, tx: 0, ty: 0 });
+    setView(DEFAULT_VIEW);
   }, []);
 
   // ---------- Selection + highlight ----------
-  const highlightNode = hovered ?? selected;
+  useEffect(() => {
+    const first = clusterIndex.keys().next().value;
+    if (!selected && first) {
+      setSelected(first);
+      return;
+    }
+    if (selected && !clusterIndex.has(selected)) {
+      setSelected(first ?? null);
+      setSelectedMemory(null);
+    }
+  }, [clusterIndex, selected]);
+
+  useEffect(() => {
+    if (selectedMemory && !nodesRef.current.has(selectedMemory)) {
+      setSelectedMemory(null);
+    }
+  }, [nodes, selectedMemory]);
+
+  const highlightNode = hovered ?? selectedMemory ?? selected;
   const connectedSet = useMemo(() => {
     if (!highlightNode) return null;
     const set = new Set<string>([highlightNode]);
@@ -689,6 +812,11 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
   }, [highlightNode, links]);
 
   const sel = clusterIndex.get(selected ?? clusterIndex.keys().next().value ?? '');
+  const selectedMemoryNode = selectedMemory ? nodesRef.current.get(selectedMemory) : null;
+  const openFeedObservationId =
+    selectedMemoryNode?.leafKind === 'observation'
+      ? selectedMemoryNode.dbId
+      : sel?.firstObservationId;
   const totalMemories = Array.from(clusterIndex.values()).reduce((s, c) => s + c.count, 0);
   const totalLinks = useMemo(
     () =>
@@ -803,9 +931,16 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                   <g
                     key={n.id}
                     data-node-id={n.id}
+                    data-node-kind="leaf"
+                    aria-label={`${n.leafKind ?? 'memory'} ${n.dbId ?? ''}`}
                     transform={`translate(${n.x} ${n.y})`}
                     style={{ cursor: 'pointer', opacity: dim ? 0.16 : 1 }}
                     onMouseDown={(e) => onNodeMouseDown(n.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (n.parent) setSelected(n.parent);
+                      setSelectedMemory(n.id);
+                    }}
                     onMouseEnter={() => setHovered(n.id)}
                     onMouseLeave={() => setHovered(null)}
                   >
@@ -833,9 +968,16 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                   <g
                     key={n.id}
                     data-node-id={n.id}
+                    data-node-kind="cluster"
+                    aria-label={`${n.label} cluster`}
                     transform={`translate(${n.x} ${n.y})`}
                     style={{ cursor: 'pointer', opacity: dim ? 0.32 : 1 }}
                     onMouseDown={(e) => onNodeMouseDown(n.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(n.id);
+                      setSelectedMemory(null);
+                    }}
                     onMouseEnter={() => setHovered(n.id)}
                     onMouseLeave={() => setHovered(null)}
                   >
@@ -934,18 +1076,18 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
 
         <div className="graph-zoomstrip">
           {[0, 1, 2].map((z) => (
-            <span
+            <button
+              type="button"
               key={z}
               className={`zoomstep ${zoom === z ? 'is-active' : ''}`}
               onClick={() => {
                 setZoom(z as 0 | 1 | 2);
                 reheat();
               }}
-              role="button"
-              tabIndex={0}
+              aria-pressed={zoom === z}
             >
               {z === 0 ? 'Clusters' : z === 1 ? 'Sub-clusters' : 'Memories'}
-            </span>
+            </button>
           ))}
         </div>
 
@@ -975,20 +1117,61 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           ))}
         </div>
 
-        <div className="graph-inspector">
-          <div className="insp-eyebrow">CLUSTER</div>
-          <h3 className="insp-title">{sel?.label ?? 'No data'}</h3>
+        <div className={`graph-inspector ${selectedMemoryNode ? 'is-memory' : 'is-cluster'}`}>
+          <div className="insp-eyebrow">{selectedMemoryNode ? 'SELECTED MEMORY' : 'CLUSTER'}</div>
+          <h3 className="insp-title">{selectedMemoryNode?.label ?? sel?.label ?? 'No data'}</h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            <span className="chip" style={{ height: 20, fontSize: 11 }}>
-              <span className="swatch" style={{ background: sel?.color }} />
-              {(sel?.count ?? 0).toLocaleString('en-US')} memories
-            </span>
-            <span className="chip" style={{ height: 20, fontSize: 11 }}>
-              {sel?.projects?.size ?? 0} projects
-            </span>
+            {selectedMemoryNode ? (
+              <>
+                <span className="chip" style={{ height: 20, fontSize: 11 }}>
+                  <span className="swatch" style={{ background: selectedMemoryNode.color }} />
+                  {selectedMemoryNode.leafKind === 'observation'
+                    ? `Observation #${selectedMemoryNode.dbId}`
+                    : selectedMemoryNode.leafKind === 'summary'
+                      ? `Summary #${selectedMemoryNode.dbId}`
+                      : `Prompt #${selectedMemoryNode.dbId}`}
+                </span>
+                <span className="chip" style={{ height: 20, fontSize: 11 }}>
+                  {TYPE_LABELS[selectedMemoryNode.type ?? ''] ?? selectedMemoryNode.type ?? 'memory'}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="chip" style={{ height: 20, fontSize: 11 }}>
+                  <span className="swatch" style={{ background: sel?.color }} />
+                  {(sel?.count ?? 0).toLocaleString('en-US')} memories
+                </span>
+                <span className="chip" style={{ height: 20, fontSize: 11 }}>
+                  {sel?.projects?.size ?? 0} projects
+                </span>
+              </>
+            )}
           </div>
 
-          {sel?.concepts && sel.concepts.length > 0 && (
+          {selectedMemoryNode && (
+            <div className="insp-section">
+              <h4>Memory details</h4>
+              <dl className="insp-kv">
+                <dt>Source</dt>
+                <dd>{sel?.label ?? selectedMemoryNode.parent ?? '—'}</dd>
+                <dt>Project</dt>
+                <dd>{selectedMemoryNode.project || '—'}</dd>
+                <dt>Captured</dt>
+                <dd>{formatRelative(selectedMemoryNode.createdAt)}</dd>
+              </dl>
+            </div>
+          )}
+
+          {!selectedMemoryNode && sel?.lastSeen && (
+            <div className="insp-section">
+              <h4>Last activity</h4>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--ink-1)' }}>
+                {formatRelative(sel.lastSeen)}
+              </div>
+            </div>
+          )}
+
+          {!selectedMemoryNode && sel?.concepts && sel.concepts.length > 0 && (
             <div className="insp-section">
               <h4>Top concepts</h4>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -1001,7 +1184,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
             </div>
           )}
 
-          {memoryMix.length > 0 && (
+          {!selectedMemoryNode && memoryMix.length > 0 && (
             <div className="insp-section">
               <h4>Memory mix</h4>
               <div
@@ -1034,7 +1217,7 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
             </div>
           )}
 
-          {sel?.projects && sel.projects.size > 0 && (
+          {!selectedMemoryNode && sel?.projectBreakdown && sel.projectBreakdown.length > 0 && (
             <div className="insp-section">
               <h4>Projects</h4>
               <div
@@ -1045,14 +1228,27 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
                   color: 'var(--ink-1)'
                 }}
               >
-                {Array.from(sel.projects).slice(0, 6).map((p) => (
-                  <div key={p}>↳ {p}</div>
+                {sel.projectBreakdown.slice(0, 6).map(([p, count]) => (
+                  <div key={p} className="graph-project-row">
+                    <span>↳ {p}</span>
+                    <b>{count}</b>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          <button type="button" className="btn primary" style={{ marginTop: 'auto' }}>
+          <button
+            type="button"
+            className="btn primary"
+            style={{ marginTop: 'auto' }}
+            disabled={!openFeedObservationId || !onJumpToObservation}
+            onClick={() => {
+              if (openFeedObservationId && onJumpToObservation) {
+                onJumpToObservation(openFeedObservationId);
+              }
+            }}
+          >
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" />
               <circle cx="12" cy="12" r="3" />
@@ -1078,16 +1274,6 @@ export function GraphPage({ observations, summaries, prompts }: GraphPageProps) 
           />
         </div>
 
-        <div className="graph-hint">
-          <span className="kbd">drag</span>
-          <span>reposition</span>
-          <span className="graph-hint__sep">·</span>
-          <span className="kbd">scroll</span>
-          <span>zoom</span>
-          <span className="graph-hint__sep">·</span>
-          <span className="kbd">click</span>
-          <span>select</span>
-        </div>
       </div>
     </div>
   );

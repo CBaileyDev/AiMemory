@@ -28,6 +28,14 @@ function getPidFilePath(): string {
   return path.join(getDataDirectory(), 'worker.pid');
 }
 
+function getKnownWorkerDataDirs(): string[] {
+  return [
+    getDataDirectory(),
+    path.join(homedir(), '.claude-mem'),
+    path.join(homedir(), '.claude-mem-dev')
+  ];
+}
+
 // Orphaned process cleanup patterns and thresholds
 // These are claude-mem processes that can accumulate if not properly terminated
 const ORPHAN_PROCESS_PATTERNS = [
@@ -187,6 +195,53 @@ export interface PidInfo {
   pid: number;
   port: number;
   startedAt: string;
+}
+
+export interface ProtectedWorkerPidOptions {
+  currentPid?: number;
+  parentPid?: number;
+  dataDirs?: string[];
+  isAlive?: (pid: number) => boolean;
+}
+
+/**
+ * Collect PIDs that startup cleanup must not kill.
+ *
+ * The worker can run against multiple data dirs at once: the production
+ * daemon on :37777 and a dev daemon on :37780. Both use the same
+ * worker-service.cjs command line, so command matching alone cannot safely
+ * tell them apart. PID files are the scoped source of truth.
+ */
+export function collectProtectedWorkerPids(options: ProtectedWorkerPidOptions = {}): Set<number> {
+  const protectedPids = new Set<number>();
+  const addPid = (pid: unknown) => {
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return;
+    protectedPids.add(pid);
+  };
+
+  addPid(options.currentPid ?? process.pid);
+  addPid(options.parentPid ?? process.ppid);
+
+  const dataDirs = Array.from(new Set((options.dataDirs ?? getKnownWorkerDataDirs()).filter(Boolean)));
+  const isAlive = options.isAlive ?? isProcessAlive;
+
+  for (const dir of dataDirs) {
+    const pidFilePath = path.join(dir, 'worker.pid');
+    if (!existsSync(pidFilePath)) continue;
+
+    try {
+      const info = JSON.parse(readFileSync(pidFilePath, 'utf-8')) as Partial<PidInfo>;
+      const pid = info.pid;
+      if (typeof pid === 'number' && Number.isInteger(pid) && pid > 0 && isAlive(pid)) {
+        protectedPids.add(pid);
+      }
+    } catch {
+      // Ignore malformed PID files here; stale file cleanup handles the
+      // standard current-data-dir PID path elsewhere.
+    }
+  }
+
+  return protectedPids;
 }
 
 /**
@@ -517,18 +572,14 @@ export async function aggressiveStartupCleanup(): Promise<void> {
   const pidsToKill: number[] = [];
   const allPatterns = [...AGGRESSIVE_CLEANUP_PATTERNS, ...AGE_GATED_CLEANUP_PATTERNS];
 
-  // Protect parent process (the hook that spawned us) from being killed.
-  // Without this, a new daemon kills its own parent hook process (#1426).
-  //
-  // Note: readPidFile() is not used here because start() writes the new PID
-  // before initializeBackground() calls this function, so readPidFile() would
-  // just return process.pid (already protected). If a pre-existing worker needs
-  // protection, ensureWorkerStarted() handles that by returning early when a
-  // healthy worker is detected — we never reach this code in that case.
-  const protectedPids = new Set<number>([currentPid]);
-  if (process.ppid && process.ppid > 0) {
-    protectedPids.add(process.ppid);
-  }
+  // Protect the worker that is starting, its parent hook, and any healthy
+  // workers recorded by known production/dev PID files. Dev and prod workers
+  // share a command name, so command-line matching is not enough.
+  const protectedPids = collectProtectedWorkerPids({
+    currentPid,
+    parentPid: process.ppid,
+    dataDirs: getKnownWorkerDataDirs()
+  });
 
   try {
     if (isWindows) {

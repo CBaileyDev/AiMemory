@@ -54,6 +54,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const args = process.argv.slice(2);
 const FRESH = args.includes('--fresh');
+const ENSURE_SCHEMA_ONLY = args.includes('--ensure-schema-only');
 const COUNT = parseIntArg(args, '--count', 500);
 const SILENT = args.includes('--silent');
 
@@ -66,6 +67,137 @@ function parseIntArg(argv, flag, fallback) {
 
 function log(...msg) {
   if (!SILENT) console.log(...msg);
+}
+
+function tableExists(db, tableName) {
+  return Boolean(db.query(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`
+  ).get(tableName));
+}
+
+function tableColumns(db, tableName) {
+  return db.query(`PRAGMA table_info('${tableName}')`).all();
+}
+
+function createSdkSessionsSchema(db) {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sdk_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      content_session_id TEXT UNIQUE NOT NULL,
+      memory_session_id TEXT UNIQUE,
+      project TEXT NOT NULL,
+      platform_source TEXT NOT NULL DEFAULT 'claude',
+      user_prompt TEXT,
+      started_at TEXT NOT NULL,
+      started_at_epoch INTEGER NOT NULL,
+      completed_at TEXT,
+      completed_at_epoch INTEGER,
+      status TEXT CHECK(status IN ('active', 'completed', 'failed')) NOT NULL DEFAULT 'active',
+      worker_port INTEGER,
+      prompt_counter INTEGER DEFAULT 0,
+      custom_title TEXT
+    )
+  `);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_claude_id ON sdk_sessions(content_session_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_sdk_id ON sdk_sessions(memory_session_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_project ON sdk_sessions(project)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_status ON sdk_sessions(status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_started ON sdk_sessions(started_at_epoch DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sdk_sessions_platform_source ON sdk_sessions(platform_source)`);
+}
+
+function stringOr(value, fallback) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function numberOr(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeStatus(value) {
+  return ['active', 'completed', 'failed'].includes(value) ? value : 'completed';
+}
+
+function repairSdkSessionsSchema(db) {
+  const backup = `sdk_sessions_legacy_${Date.now()}`;
+  db.run(`ALTER TABLE sdk_sessions RENAME TO ${backup}`);
+  createSdkSessionsSchema(db);
+
+  const rows = db.query(`SELECT * FROM ${backup}`).all();
+  const seenContentIds = new Set();
+  const insert = db.prepare(`
+    INSERT INTO sdk_sessions (
+      memory_session_id, content_session_id, project, platform_source,
+      started_at, started_at_epoch, status, worker_port, prompt_counter, custom_title
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  rows.forEach((row, index) => {
+    const fallbackId = `legacy-dev-session-${index}`;
+    const memorySessionId = stringOr(row.memory_session_id, stringOr(row.content_session_id, fallbackId));
+    let contentSessionId = stringOr(row.content_session_id, memorySessionId);
+    if (seenContentIds.has(contentSessionId)) {
+      contentSessionId = `${contentSessionId}-${index}`;
+    }
+    seenContentIds.add(contentSessionId);
+
+    const startedEpoch = numberOr(row.started_at_epoch, Date.now());
+    const startedAt = stringOr(row.started_at, new Date(startedEpoch).toISOString());
+
+    insert.run(
+      memorySessionId,
+      contentSessionId,
+      stringOr(row.project, 'dev/legacy'),
+      stringOr(row.platform_source, 'claude'),
+      startedAt,
+      startedEpoch,
+      normalizeStatus(row.status),
+      numberOr(row.worker_port, null),
+      numberOr(row.prompt_counter, 0),
+      typeof row.custom_title === 'string' ? row.custom_title : null,
+    );
+  });
+
+  db.run(`DROP TABLE IF EXISTS ${backup}`);
+}
+
+function ensureSdkSessionsSchema(db) {
+  if (!tableExists(db, 'sdk_sessions')) {
+    createSdkSessionsSchema(db);
+    return;
+  }
+
+  const cols = tableColumns(db, 'sdk_sessions');
+  const names = new Set(cols.map((c) => c.name));
+  const required = [
+    'id',
+    'content_session_id',
+    'memory_session_id',
+    'project',
+    'platform_source',
+    'started_at',
+    'started_at_epoch',
+    'status',
+  ];
+
+  if (!required.every((col) => names.has(col))) {
+    repairSdkSessionsSchema(db);
+    return;
+  }
+
+  const optional = {
+    worker_port: `ALTER TABLE sdk_sessions ADD COLUMN worker_port INTEGER`,
+    prompt_counter: `ALTER TABLE sdk_sessions ADD COLUMN prompt_counter INTEGER DEFAULT 0`,
+    custom_title: `ALTER TABLE sdk_sessions ADD COLUMN custom_title TEXT`,
+  };
+  for (const [col, sql] of Object.entries(optional)) {
+    if (!names.has(col)) db.run(sql);
+  }
+  db.run(`UPDATE sdk_sessions SET platform_source = 'claude' WHERE platform_source IS NULL OR platform_source = ''`);
+  createSdkSessionsSchema(db);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,30 +332,7 @@ function ensureSchema(db) {
   // a realistic WoW/sparkline surface. Columns match the production
   // migration runner so the worker's migration check is a no-op on
   // seeded databases.
-  db.run(`
-    CREATE TABLE IF NOT EXISTS sdk_sessions (
-      memory_session_id TEXT PRIMARY KEY,
-      content_session_id TEXT,
-      project TEXT,
-      started_at_epoch INTEGER,
-      status TEXT DEFAULT 'active',
-      platform_source TEXT NOT NULL DEFAULT 'claude'
-    )
-  `);
-  const sdkCols = db.query(`PRAGMA table_info('sdk_sessions')`).all();
-  const required = {
-    platform_source: `ALTER TABLE sdk_sessions ADD COLUMN platform_source TEXT NOT NULL DEFAULT 'claude'`,
-    content_session_id: `ALTER TABLE sdk_sessions ADD COLUMN content_session_id TEXT`,
-    status: `ALTER TABLE sdk_sessions ADD COLUMN status TEXT DEFAULT 'active'`,
-    started_at_epoch: `ALTER TABLE sdk_sessions ADD COLUMN started_at_epoch INTEGER`
-  };
-  for (const [col, sql] of Object.entries(required)) {
-    if (!sdkCols.some((c) => c.name === col)) db.run(sql);
-  }
-  db.run(`
-    CREATE INDEX IF NOT EXISTS idx_sdk_sessions_platform_source
-      ON sdk_sessions (platform_source)
-  `);
+  ensureSdkSessionsSchema(db);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS observations (
@@ -274,6 +383,12 @@ function main() {
   db.run('PRAGMA journal_mode=WAL');
   ensureSchema(db);
 
+  if (ENSURE_SCHEMA_ONLY) {
+    db.close();
+    log(`  Verified dev DB schema at ${DB_PATH}`);
+    return;
+  }
+
   const rand = mulberry32(Date.now() >>> 0);
   const rows = makeObservations(COUNT, rand, Date.now());
 
@@ -292,8 +407,19 @@ function main() {
   // Backfill sdk_sessions so platform_source joins resolve in the
   // Sources dashboard + source-aware filters.
   const sessionUpsert = db.prepare(`
-    INSERT OR REPLACE INTO sdk_sessions (memory_session_id, content_session_id, project, started_at_epoch, status, platform_source)
-    VALUES (?, ?, ?, ?, 'completed', ?)
+    INSERT INTO sdk_sessions (
+      memory_session_id, content_session_id, project, started_at, started_at_epoch, status, platform_source
+    ) VALUES (?, ?, ?, ?, ?, 'completed', ?)
+    ON CONFLICT(memory_session_id) DO UPDATE SET
+      content_session_id = excluded.content_session_id,
+      project = excluded.project,
+      platform_source = excluded.platform_source,
+      started_at_epoch = min(sdk_sessions.started_at_epoch, excluded.started_at_epoch),
+      started_at = CASE
+        WHEN sdk_sessions.started_at_epoch <= excluded.started_at_epoch THEN sdk_sessions.started_at
+        ELSE excluded.started_at
+      END,
+      status = excluded.status
   `);
   const sessionAgg = new Map();
   for (const row of rows) {
@@ -308,7 +434,14 @@ function main() {
     }
   }
   for (const s of sessionAgg.values()) {
-    sessionUpsert.run(s.memory_session_id, s.memory_session_id, s.project, s.started_at_epoch, s.platform_source);
+    sessionUpsert.run(
+      s.memory_session_id,
+      s.memory_session_id,
+      s.project,
+      new Date(s.started_at_epoch).toISOString(),
+      s.started_at_epoch,
+      s.platform_source
+    );
   }
 
   const txn = db.transaction((batch) => {

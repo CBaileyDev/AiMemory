@@ -69,6 +69,20 @@ describe('Phase 9: seed-dev-db.js', () => {
       for (const required of ['memory_session_id', 'project', 'source', 'type', 'created_at_epoch']) {
         expect(cols).toContain(required);
       }
+
+      const sdkCols = (db.query(`PRAGMA table_info('sdk_sessions')`).all() as Array<{ name: string }>)
+        .map((c) => c.name);
+      for (const required of ['id', 'memory_session_id', 'content_session_id', 'project', 'started_at', 'started_at_epoch']) {
+        expect(sdkCols).toContain(required);
+      }
+
+      const seededSession = db
+        .query('SELECT id, memory_session_id, content_session_id, started_at FROM sdk_sessions LIMIT 1')
+        .get() as { id: number; memory_session_id: string; content_session_id: string; started_at: string } | null;
+      expect(seededSession).not.toBeNull();
+      expect(Number.isInteger(seededSession!.id)).toBe(true);
+      expect(seededSession!.content_session_id).toBe(seededSession!.memory_session_id);
+      expect(seededSession!.started_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     } finally {
       db.close();
     }

@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 
 async function openSettings(page: import('@playwright/test').Page) {
   // Scope to the primary nav so we don't collide with other links.
-  const nav = page.locator('nav[aria-label="Primary"]');
+  const nav = page.locator('aside[aria-label="Workspace navigation"]');
   await nav.getByRole('button', { name: 'Settings' }).click();
   await expect(page.locator('.am-settings-page')).toBeVisible({ timeout: 2_000 });
 }
@@ -23,7 +23,7 @@ async function gotoSearchSection(page: import('@playwright/test').Page) {
 test.describe('Settings persistence', () => {
   test('edit → save → reload → value persists', async ({ page }) => {
     await page.goto('/');
-    await page.locator('.am-card').first().waitFor();
+    await page.locator('.mem').first().waitFor();
 
     await openSettings(page);
     await gotoSearchSection(page);
@@ -50,7 +50,7 @@ test.describe('Settings persistence', () => {
     await expect(page.locator('.am-settings-page')).toBeHidden({ timeout: 2_000 });
 
     await page.reload();
-    await page.locator('.am-card').first().waitFor();
+    await page.locator('.mem').first().waitFor();
 
     await openSettings(page);
     await gotoSearchSection(page);

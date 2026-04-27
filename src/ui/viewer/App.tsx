@@ -28,8 +28,13 @@ import { mergeAndDeduplicateByProject } from './utils/data';
 import { matchesFilter } from './state/filterReducer';
 
 const APP_VERSION = '12.1.5';
-const WORKER_PORT = 37777;
+const DEFAULT_WORKER_PORT = 37777;
 const FRESH_ID_TTL_MS = 4000;
+
+function parsePositivePort(value: unknown): number | null {
+  const port = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(port) && port > 0 ? port : null;
+}
 
 function normalizeFeedType(type?: string | null): string | undefined {
   if (!type) return undefined;
@@ -151,6 +156,7 @@ export function App() {
 
   const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
   const prevLiveIds = useRef<Set<number>>(new Set());
+  const mainRef = useRef<HTMLElement | null>(null);
 
   useTauri();
   const { route, go } = useRoute();
@@ -159,6 +165,19 @@ export function App() {
   const { settings, saveSettings, isSaving, saveStatus } = useSettings();
   const { scheme, setScheme, cycleScheme } = useTheme();
   const { stats } = useStats();
+
+  const workerPort = useMemo(() => {
+    const statsPort = parsePositivePort(stats?.worker?.port);
+    if (statsPort) return statsPort;
+
+    if (typeof window !== 'undefined') {
+      const locationPort = parsePositivePort(window.location.port);
+      if (locationPort) return locationPort;
+    }
+
+    const settingsPort = parsePositivePort(settings?.CLAUDE_MEM_WORKER_PORT);
+    return settingsPort ?? DEFAULT_WORKER_PORT;
+  }, [settings?.CLAUDE_MEM_WORKER_PORT, stats?.worker?.port]);
 
   const { data: dashboardData } = useSourcesDashboard(true);
 
@@ -291,6 +310,14 @@ export function App() {
     handleLoadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryProject, primarySource]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (main) {
+      main.scrollTo({ top: 0, left: 0 });
+    }
+    window.scrollTo({ top: 0, left: 0 });
+  }, [route]);
 
   useEffect(() => {
     let gTimer: number | null = null;
@@ -444,7 +471,7 @@ export function App() {
         projectCounts={projectCounts}
         selectedProject={filterState.projects[0] ?? null}
         onProjectChange={handleProjectChange}
-        workerPort={WORKER_PORT}
+        workerPort={workerPort}
         workerUptimeMs={stats?.worker?.uptime ? stats.worker.uptime * 1000 : null}
         pendingJobs={queueDepth}
         dbSizeBytes={stats?.database?.size ?? null}
@@ -465,10 +492,10 @@ export function App() {
         consoleOpen={logsModalOpen}
         searchQuery={filterState.query}
         onSearchChange={(q) => filterDispatch({ kind: 'setQuery', value: q })}
-        workerPort={WORKER_PORT}
+        workerPort={workerPort}
       />
 
-      <main className="main">
+      <main className="main" ref={mainRef}>
         {route === 'feed' && (
           <div className="route" data-screen-label="01 Feed">
             <div className="route-head">
@@ -498,7 +525,7 @@ export function App() {
                 sourceRows={dashboardData?.sources ?? []}
                 lastSeenMs={dashboardData?.totals.lastSeenMs ?? null}
                 isConnected={isConnected}
-                workerPort={WORKER_PORT}
+                workerPort={workerPort}
               />
             </div>
 
@@ -584,13 +611,17 @@ export function App() {
             scheme={scheme}
             onSchemeChange={setScheme}
             detectedSources={sources}
+            stats={stats}
+            workerPort={workerPort}
+            isConnected={isConnected}
+            queueDepth={queueDepth}
             onClose={() => go('feed')}
           />
         )}
       </main>
 
       <StatusBar
-        workerPort={WORKER_PORT}
+        workerPort={workerPort}
         isConnected={isConnected}
         rowCount={totalMemories}
         chromaIndexed={isConnected && (dashboardData?.totals.totalSources ?? 0) > 0}

@@ -30,14 +30,44 @@ if (DATA_DIR === path.join(os.homedir(), '.claude-mem')) {
 }
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+ensureDevSettingsFile();
 
 // Seed if the dev DB doesn't exist yet — keeps first-time setup one-step.
 const dbPath = path.join(DATA_DIR, 'claude-mem.db');
 if (!fs.existsSync(dbPath)) {
   console.log(`  dev DB not found, seeding a fresh one at ${dbPath}`);
+  runSeed(['--fresh', '--silent'], launchWorker);
+} else {
+  runSeed(['--ensure-schema-only', '--silent'], launchWorker);
+}
+
+function ensureDevSettingsFile() {
+  const settingsPath = path.join(DATA_DIR, 'settings.json');
+  let settings = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch {
+      settings = {};
+    }
+  }
+
+  const next = {
+    ...settings,
+    CLAUDE_MEM_DATA_DIR: DATA_DIR,
+    CLAUDE_MEM_WORKER_PORT: PORT,
+    CLAUDE_MEM_WORKER_HOST: settings.CLAUDE_MEM_WORKER_HOST || '127.0.0.1',
+  };
+
+  if (JSON.stringify(next) !== JSON.stringify(settings)) {
+    fs.writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf-8');
+  }
+}
+
+function runSeed(args, onDone) {
   const seed = spawn(
     'bun',
-    [path.join('scripts', 'seed-dev-db.js'), '--fresh', '--silent'],
+    [path.join('scripts', 'seed-dev-db.js'), ...args],
     {
       cwd: process.cwd(),
       env: { ...process.env, CLAUDE_MEM_DATA_DIR: DATA_DIR },
@@ -46,13 +76,15 @@ if (!fs.existsSync(dbPath)) {
   );
   seed.on('close', (code) => {
     if (code !== 0) {
-      console.error('  seed failed; aborting dev server start');
+      console.error('  dev DB preparation failed; aborting dev server start');
       process.exit(code ?? 1);
     }
-    launchWorker();
+    onDone();
   });
-} else {
-  launchWorker();
+  seed.on('error', (err) => {
+    console.error('  failed to prepare dev DB:', err.message);
+    process.exit(1);
+  });
 }
 
 function launchWorker() {
